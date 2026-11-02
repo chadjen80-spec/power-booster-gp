@@ -1282,6 +1282,13 @@
       if (slot.textContent !== (it ? it.icon : '')) slot.textContent = it ? it.icon : '';
       setText('hud-item-name', it ? it.name + (vin.autoGas ? '' : ' [E]') : '');
     }
+    // the slot only appears while an item is rolling or in hand; the touch button dims when there's nothing to use
+    const holding = p.rolling > 0 || !!p.item;
+    if (holding !== hudCache.holding) {
+      hudCache.holding = holding;
+      document.querySelector('.hud-item').classList.toggle('empty', !holding);
+      document.querySelector('.t-item').classList.toggle('empty', !holding);
+    }
 
     // booster
     const panel = $('boost-panel');
