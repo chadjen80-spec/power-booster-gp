@@ -1,0 +1,20 @@
+{
+  "name": "Power Booster GP",
+  "short_name": "Power Booster",
+  "description": "Chibi jet-surfboard racing: 3-stage Booster, item battles, jumps and online races.",
+  "lang": "th",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#070614",
+  "theme_color": "#070614",
+  "categories": ["games"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

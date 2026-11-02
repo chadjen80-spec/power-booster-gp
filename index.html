@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#070614">
+<meta name="apple-mobile-web-app-title" content="Power Booster">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Power Booster GP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&family=Orbitron:wght@600;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+
+<!-- ===== Title ===== -->
+<section id="scr-title" class="screen show">
+  <div class="logo">
+    <div class="logo-main">POWER<span>BOOSTER</span></div>
+    <div class="logo-sub">JET SURF GRAND PRIX</div>
+  </div>
+  <div class="row center">
+    <button class="btn big" id="btn-start">เล่นคนเดียว ▶</button>
+    <button class="btn big alt" id="btn-online">เล่นออนไลน์ 🌐</button>
+  </div>
+  <div class="diff-row quality-row">
+    <span>คุณภาพกราฟิก:</span>
+    <button class="chip" data-q="high">สูง</button>
+    <button class="chip" data-q="medium">กลาง</button>
+    <button class="chip" data-q="low">ต่ำ (เครื่องสเปคต่ำ)</button>
+  </div>
+  <div class="row center">
+    <button class="btn ghost touch-only" id="btn-fullscreen">⛶ เต็มจอ</button>
+    <button class="btn ghost hidden" id="btn-install">📲 ติดตั้งเป็นแอป</button>
+  </div>
+  <div class="controls-box touch-only">
+    <div><b>ลากนิ้วซ้าย</b> เลี้ยว (เร่งอัตโนมัติ)</div>
+    <div><b>BOOST</b> BOOSTER 3 จังหวะ</div>
+    <div><b>ดริฟต์</b> กดค้างตอนเลี้ยว</div>
+    <div><b>ไอเทม</b> ใช้ไอเทม</div>
+  </div>
+  <div class="controls-box keys-only">
+    <div><b>W / ↑</b> เร่ง</div>
+    <div><b>S / ↓</b> เบรก / ถอย</div>
+    <div><b>A D / ← →</b> เลี้ยว</div>
+    <div><b>Space</b> ดริฟต์ (ปล่อยแล้วได้เทอร์โบ)</div>
+    <div><b>Shift / K</b> BOOSTER 3 จังหวะ</div>
+    <div><b>E / J</b> ใช้ไอเทม</div>
+    <div><b>Esc / P</b> หยุดเกม</div>
+  </div>
+</section>
+
+<!-- ===== Character select ===== -->
+<section id="scr-char" class="screen">
+  <div class="panel right-panel">
+    <h2>เลือกนักแข่ง</h2>
+    <div id="char-grid" class="char-grid"></div>
+    <div class="char-info">
+      <div id="char-name" class="char-name"></div>
+      <div id="char-title" class="char-title"></div>
+      <div class="stat"><span>ความเร็ว</span><div class="bar"><i id="st-speed"></i></div></div>
+      <div class="stat"><span>อัตราเร่ง</span><div class="bar"><i id="st-accel"></i></div></div>
+      <div class="stat"><span>การควบคุม</span><div class="bar"><i id="st-handling"></i></div></div>
+    </div>
+    <div class="row">
+      <button class="btn ghost" data-go="title">◀ กลับ</button>
+      <button class="btn" id="btn-char-ok">ต่อไป ▶</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Track select ===== -->
+<section id="scr-track" class="screen">
+  <div class="panel center-panel">
+    <h2>เลือกด่าน</h2>
+    <div id="track-grid" class="track-grid"></div>
+    <div class="diff-row">
+      <span>ความยาก:</span>
+      <button class="chip" data-diff="0">ง่าย</button>
+      <button class="chip" data-diff="1">ปกติ</button>
+      <button class="chip" data-diff="2">ยาก</button>
+    </div>
+    <div class="race-info">3 รอบ (Laps) • 8 นักแข่ง</div>
+    <div class="row">
+      <button class="btn ghost" data-go="char">◀ กลับ</button>
+      <button class="btn big" id="btn-race">เริ่มแข่ง! 🏁</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Online: connect ===== -->
+<section id="scr-online" class="screen dim">
+  <div class="panel center-panel small wide">
+    <h2>เล่นออนไลน์</h2>
+    <label class="field">ชื่อผู้เล่น<input id="on-name" maxlength="14" placeholder="ชื่อของคุณ"></label>
+    <label class="field">เซิร์ฟเวอร์<input id="on-server" placeholder="localhost:3000"></label>
+    <button class="btn" id="btn-create">สร้างห้องใหม่</button>
+    <div class="or">— หรือเข้าห้องเพื่อน —</div>
+    <div class="join-row">
+      <input id="on-code" maxlength="4" placeholder="รหัสห้อง">
+      <button class="btn" id="btn-join">เข้าห้อง</button>
+    </div>
+    <div id="on-msg" class="msg"></div>
+    <div class="row"><button class="btn ghost" data-go="char">◀ กลับ</button></div>
+  </div>
+</section>
+
+<!-- ===== Online: lobby ===== -->
+<section id="scr-lobby" class="screen dim">
+  <div class="panel center-panel">
+    <h2>ห้อง <span id="lb-code" class="room-code"></span></h2>
+    <div class="lb-hint">ส่งรหัสห้องนี้ให้เพื่อน แล้วให้เปิด <b id="lb-url"></b> → เล่นออนไลน์ → เข้าห้อง</div>
+    <ul id="lb-players" class="lb-players"></ul>
+    <div class="lb-settings">
+      <label>ด่าน <select id="lb-track"></select></label>
+      <label>ความยากบอท <select id="lb-diff"><option value="0">ง่าย</option><option value="1">ปกติ</option><option value="2">ยาก</option></select></label>
+    </div>
+    <div id="lb-wait" class="lb-wait">รอหัวห้องกดเริ่มแข่ง...</div>
+    <div class="row">
+      <button class="btn ghost" id="lb-leave">ออกจากห้อง</button>
+      <button class="btn ghost" id="lb-char">เปลี่ยนตัวละคร</button>
+      <button class="btn big" id="lb-start">เริ่มแข่ง! 🏁</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== HUD ===== -->
+<section id="hud" class="hidden">
+  <div class="hud-tl">
+    <div class="pos"><span id="hud-pos">8</span><sup id="hud-pos-suf">th</sup><small>/8</small></div>
+    <div class="lap">LAP <span id="hud-lap">1</span>/3</div>
+    <div class="time" id="hud-time">0:00.00</div>
+    <ol id="hud-standings"></ol>
+  </div>
+  <div class="hud-item">
+    <div class="item-slot" id="hud-item"></div>
+    <div class="item-name" id="hud-item-name"></div>
+  </div>
+  <div class="hud-br">
+    <div class="speed"><span id="hud-speed">0</span><small>km/h</small></div>
+    <div class="boost-panel" id="boost-panel">
+      <div class="boost-head">
+        <span>BOOSTER</span>
+        <span class="boost-lv"><i data-lv="1"></i><i data-lv="2"></i><i data-lv="3"></i></span>
+      </div>
+      <div class="boost-bar"><i id="hud-gauge"></i></div>
+      <div class="boost-state" id="hud-boost-state">ชาร์จพลัง...</div>
+      <div class="boost-count" id="hud-boost-count"></div>
+    </div>
+  </div>
+  <canvas id="minimap" width="200" height="200"></canvas>
+  <div id="big-msg"></div>
+  <div id="wrong-way" class="hidden">⟲ WRONG WAY</div>
+  <!-- touch controls (phones / tablets) -->
+  <div id="touch-ui">
+    <div id="t-stick-zone"><div id="t-stick"><div id="t-knob"></div></div><div class="t-hint">ลากเพื่อเลี้ยว</div></div>
+    <button id="t-pause" class="t-btn" data-tap="Escape">II</button>
+    <button class="t-btn t-boost" data-tap="KeyK">BOOST</button>
+    <button class="t-btn t-drift" data-hold="Space">ดริฟต์</button>
+    <button class="t-btn t-item" data-tap="KeyJ">ไอเทม</button>
+    <button class="t-btn t-brake" data-hold="KeyS">เบรก</button>
+  </div>
+</section>
+
+<!-- ===== Pause ===== -->
+<section id="scr-pause" class="screen dim">
+  <div class="panel center-panel small">
+    <h2>หยุดเกม</h2>
+    <button class="btn" id="btn-resume">เล่นต่อ</button>
+    <button class="btn ghost" id="btn-restart">เริ่มใหม่</button>
+    <button class="btn ghost" id="btn-quit">ออกไปเมนู</button>
+  </div>
+</section>
+
+<!-- ===== Results ===== -->
+<section id="scr-results" class="screen dim">
+  <div class="panel center-panel">
+    <h2 id="res-title">ผลการแข่งขัน</h2>
+    <table class="res-table"><tbody id="res-body"></tbody></table>
+    <div class="row">
+      <button class="btn" id="btn-again">แข่งอีกครั้ง</button>
+      <button class="btn ghost" id="btn-tracks">เลือกด่าน</button>
+      <button class="btn ghost" id="btn-menu">เมนูหลัก</button>
+    </div>
+  </div>
+</section>
+
+<div id="rotate"><div>📱↻</div><p>หมุนมือถือเป็นแนวนอนเพื่อเล่น</p></div>
+<div id="loading">กำลังโหลด...</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/MaskPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/optimize.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/net.js"></script>
+<script src="js/chibi.js"></script>
+<script src="js/track.js"></script>
+<script src="js/game.js"></script>
+<script src="js/touch.js"></script>
+<script src="js/pwa.js"></script>
+</body>
+</html>

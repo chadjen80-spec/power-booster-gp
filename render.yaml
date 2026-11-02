@@ -1,0 +1,14 @@
+# Render Blueprint: one Node web service that serves the game and the multiplayer WebSocket rooms.
+# Render provides HTTPS (needed for the installable PWA) and wss:// for multiplayer automatically.
+services:
+  - type: web
+    name: power-booster-gp
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
