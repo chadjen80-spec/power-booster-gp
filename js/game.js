@@ -13,6 +13,7 @@
   const BOOST_MUL = [1, 1.25, 1.5, 1.8];         // top-speed multiplier per booster stage
   const BOOST_COLORS = [0, 0x22e6ff, 0xff3ad0, 0xffffff];
   const GAUGE_REGEN = 7;                         // gauge % per second
+  const BOOST_MIN = 20;                          // gauge % needed for a short Lv.1-only boost
   const GRAVITY = 34;
   const DIFFICULTY = [{ skill: [0.78, 0.86], rubber: 0.06, item: 0.6 }, { skill: [0.86, 0.94], rubber: 0.09, item: 1 }, { skill: [0.93, 1.0], rubber: 0.12, item: 1.4 }];
 
@@ -387,7 +388,7 @@
       this.speed = 0; this.idx = idx; this.lap = 0; this.progress = 0;
       this.finished = false; this.finishTime = 0; this.place = 8;
       this.item = null; this.rolling = 0; this.pendingItem = null;
-      this.gauge = rand(40, 70); this.stage = 0; this.stageTimer = 0;
+      this.gauge = rand(40, 70); this.stage = 0; this.stageTimer = 0; this.stageDur = STAGE_TIME; this.boostMax = 3;
       this.turbo = 0; this.spin = 0; this.shield = 0; this.shock = 0;
       this.drifting = false; this.driftDir = 0; this.driftTime = 0;
       this.steerVis = 0; this.hop = 0; this.bob = Math.random() * 10; this.wallCd = 0;
@@ -448,10 +449,17 @@
       this.updateModel(dt, track.samples[this.idx], this.input);
     }
 
+    // Full gauge: Lv.1 -> Lv.2 -> Lv.3 with a 3s countdown each.
+    // Partial gauge (>= BOOST_MIN): Lv.1 only, lasting a share of 3s that matches the gauge, and it empties the gauge.
     activateBooster() {
-      if (this.stage > 0 || this.gauge < 100 || this.spin > 0) return false;
-      this.stage = 1; this.stageTimer = STAGE_TIME; this.gauge = 100;
-      if (this.isPlayer) { audio.sfx('boost1'); bigMsg('BOOST Lv.1', true); }
+      if (this.stage > 0 || this.gauge < BOOST_MIN || this.spin > 0) return false;
+      const full = this.gauge >= 100;
+      this.stage = 1;
+      this.boostMax = full ? 3 : 1;
+      this.stageDur = full ? STAGE_TIME : Math.max(0.6, STAGE_TIME * this.gauge / 100);
+      this.stageTimer = this.stageDur;
+      this.gauge = full ? 100 : 0;
+      if (this.isPlayer) { audio.sfx('boost1'); bigMsg(full ? 'BOOST Lv.1' : 'BOOST!', true); }
       return true;
     }
 
@@ -467,7 +475,7 @@
       }
       if (kind === 'shock') { this.shock = 2.5; this.speed *= 0.55; }
       else { this.spin = 1.4; this.speed *= 0.25; }
-      if (this.stage > 0) { this.stage = 0; this.gauge = 30; }
+      if (this.stage > 0) { this.stage = 0; if (this.boostMax === 3) this.gauge = 30; }   // a full boost keeps a little charge
       this.drifting = false; this.turbo = 0;
       if (this.isPlayer) { audio.sfx('hit'); race.shake = 0.6; bigMsg(kind === 'shock' ? 'โดนช็อก!' : 'โดนโจมตี!', true); }
     }
@@ -565,7 +573,7 @@
         inp.drift = down('Space');
         if (canControl) {
           if (hit('ShiftLeft', 'ShiftRight', 'KeyK')) {
-            if (!this.activateBooster() && this.stage === 0) bigMsg(`BOOSTER ${Math.floor(this.gauge)}%`, true);
+            if (!this.activateBooster() && this.stage === 0) bigMsg(`BOOSTER ${Math.floor(this.gauge)}% (ต้องมี ${BOOST_MIN}%)`, true);
           }
           if (hit('KeyE', 'KeyJ')) this.useItem();
         }
@@ -589,8 +597,8 @@
         this.stageTimer -= dt;
         if (this.isPlayer && Math.ceil(this.stageTimer) !== before && this.stageTimer > 0) audio.sfx('tick');
         if (this.stageTimer <= 0) {
-          if (this.stage < 3) {
-            this.stage++; this.stageTimer = STAGE_TIME;
+          if (this.stage < this.boostMax) {
+            this.stage++; this.stageTimer = this.stageDur = STAGE_TIME;
             if (this.isPlayer) { audio.sfx('boost' + this.stage); bigMsg(this.stage === 3 ? 'MAX BOOST!!' : 'BOOST Lv.' + this.stage, true); race.shake = 0.3; }
           } else { this.stage = 0; this.gauge = 0; }
         }
@@ -1277,15 +1285,16 @@
 
     // booster
     const panel = $('boost-panel');
-    $('hud-gauge').style.width = (p.stage > 0 ? (p.stageTimer / STAGE_TIME) * 100 : p.gauge) + '%';
+    $('hud-gauge').style.width = (p.stage > 0 ? (p.stageTimer / p.stageDur) * 100 : p.gauge) + '%';
     panel.classList.toggle('ready', p.stage === 0 && p.gauge >= 100);
     for (let i = 1; i <= 3; i++) panel.classList.toggle('lv' + i, p.stage === i);
     panel.querySelectorAll('.boost-lv i').forEach(e => e.classList.toggle('on', +e.dataset.lv <= p.stage));
     if (p.stage > 0) {
-      setText('hud-boost-state', p.stage < 3 ? `BOOST Lv.${p.stage} → Lv.${p.stage + 1}` : 'MAX BOOST!!');
+      setText('hud-boost-state', p.boostMax === 1 ? 'BOOST Lv.1' : p.stage < 3 ? `BOOST Lv.${p.stage} → Lv.${p.stage + 1}` : 'MAX BOOST!!');
       setText('hud-boost-count', String(Math.ceil(p.stageTimer)));
     } else {
-      setText('hud-boost-state', p.gauge >= 100 ? (vin.autoGas ? 'พร้อมแล้ว! กด BOOST' : 'พร้อมแล้ว! กด SHIFT') : `ชาร์จพลัง ${Math.floor(p.gauge)}%`);
+      setText('hud-boost-state', p.gauge >= 100 ? (vin.autoGas ? 'พร้อมแล้ว! กด BOOST' : 'พร้อมแล้ว! กด SHIFT')
+        : p.gauge >= BOOST_MIN ? `ชาร์จ ${Math.floor(p.gauge)}% • กดได้ (Lv.1)` : `ชาร์จพลัง ${Math.floor(p.gauge)}%`);
       setText('hud-boost-count', '');
     }
 
