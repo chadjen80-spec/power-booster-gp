@@ -10,7 +10,7 @@
   const TIER_START = TIER_COST.reduce((a, c, i) => (a.push(a[i] + c), a), [0]);   // total XP at tier 0..TIERS
   const MAX_XP = TIER_START[TIERS];
   const XP_PLACE = [130, 115, 100, 90, 80, 70, 65, 60];   // race XP for 1st..8th
-  const PREMIUM_PRICE = '149 บาท';
+  const PREMIUM_PRODUCT = 'pass_s' + SEASON.id;   // real-money product id (payments.js, js/shop.js)
   const ALL_DONE = { xp: 200, coins: 100 };               // bonus for finishing all three missions of the day
 
   // a mission counts a race stat (see the stat() calls in js/game.js) up to its target
@@ -73,7 +73,7 @@
     !(premium ? save.prem : save.free).includes(tier) && (!premium || save.premium);
 
   PB.pass = {
-    SEASON, TIERS, MAX_XP, PREMIUM_PRICE, tierReward,
+    SEASON, TIERS, MAX_XP, PREMIUM_PRODUCT, tierReward,
     get xp() { return save.xp; },
     get tier() { return tierOf(save.xp); },
     // XP earned inside the current tier and the XP that tier needs
@@ -107,8 +107,11 @@
       for (let t = 1; t <= TIERS; t++) for (const p of [false, true]) if (claimable(t, p)) n++;
       return n;
     },
-    // premium needs real money; until a payment system exists this only says so
-    buyPremium: () => false,
+    // called when a paid premium Pass arrives from the server (js/shop.js grantPurchase)
+    unlockPremium(season) {
+      if (season !== SEASON.id || save.premium) return;
+      save.premium = true; persist();
+    },
     // a finished race: race XP plus mission progress. Mission rewards are paid at once.
     recordRace({ place, online, stats }) {
       refreshDay();

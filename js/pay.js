@@ -35,7 +35,7 @@
     for (const p of list) {
       pay.bought.add(p.product);
       const prod = PB.shop.grantPurchase(p);
-      if (prod) toast(`🎁 ได้รับ ${prod.name}: สกิน ${PB.shop.find(prod.skin).name} + 🪙 ${prod.coins.toLocaleString()}`);
+      if (prod) toast(`🎁 ได้รับ ${prod.name}: ${prod.label}`);
     }
     changed();
   }

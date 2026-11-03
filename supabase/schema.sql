@@ -10,8 +10,9 @@ create table if not exists public.purchases (
   created_at timestamptz not null default now()
 );
 
--- the Starter Pack can be bought once per account
+-- the Starter Pack and each season's premium Pass can be bought once per account
 create unique index if not exists purchases_one_starter on public.purchases (user_id) where product = 'starter';
+create unique index if not exists purchases_one_pass on public.purchases (user_id, product) where product like 'pass\_s%';
 
 -- players can read their own purchases; nobody but the server can write
 alter table public.purchases enable row level security;

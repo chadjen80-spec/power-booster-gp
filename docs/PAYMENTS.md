@@ -3,10 +3,12 @@
 | ระบบ | ต้องใช้คีย์ |
 |---|---|
 | **บัญชีผู้เล่น + Ranked + ตารางอันดับ** | Supabase 3 ตัว (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) |
-| **Starter Pack (เงินจริง)** | Supabase 3 ตัว + Stripe 2 ตัว (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) |
+| **Starter Pack และ Season Pass พรีเมียม (เงินจริง)** | Supabase 3 ตัว + Stripe 2 ตัว (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) |
 
 ถ้าจะเปิดแค่ Ranked ก่อน ทำแค่ข้อ 1 และใส่คีย์ Supabase ก็พอ (ข้ามข้อ 2 Stripe ไปก่อนได้)
 เวอร์ชันเว็บขาย **Starter Pack 35 บาท** (สกินตำนาน "เอซ" + 🪙 1,000) ผ่าน **Stripe** (บัตร / พร้อมเพย์)
+และ **Season Pass พรีเมียม 149 บาท** ต่อซีซัน (ปลดล็อกรางวัลแถวพรีเมียม ย้อนรับขั้นที่ผ่านมาได้)
+ราคาแก้ได้ที่ `PRODUCTS` ใน `payments.js` — ซีซันใหม่ให้เพิ่มสินค้า `pass_s2` (และใน `PB.PRODUCTS` ของ `js/shop.js`)
 
 ```
 ผู้เล่นกด ซื้อ → เข้าสู่ระบบด้วยลิงก์ทางอีเมล (Supabase)

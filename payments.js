@@ -9,7 +9,11 @@ const enabled = !!(sb.enabled && env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SEC
 const stripe = enabled ? Stripe(env.STRIPE_SECRET_KEY) : null;
 
 // price list; amounts in satang (3500 = 35.00 baht). What each product contains is in js/shop.js (PB.PRODUCTS).
-const PRODUCTS = { starter: { name: 'Starter Pack — Power Booster GP', amount: 3500, currency: 'thb', once: true } };
+// The Season Pass premium product is per season (pass_s1, pass_s2, ...) so each season is bought once.
+const PRODUCTS = {
+  starter: { name: 'Starter Pack — Power Booster GP', amount: 3500, currency: 'thb', once: true },
+  pass_s1: { name: 'Season Pass พรีเมียม ซีซัน 1 — Power Booster GP', amount: 14900, currency: 'thb', once: true },
+};
 
 function json(res, code, body) {   // also used by ranked.js
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });

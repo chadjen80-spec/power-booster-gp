@@ -1,6 +1,6 @@
 // Service worker: makes the game installable and lets solo races run offline.
 // Game files are fetched fresh when online; bump VERSION when the CORE list changes.
-const VERSION = 'pb-v7';
+const VERSION = 'pb-v8';
 const CDN = 'https://cdn.jsdelivr.net/npm/three@0.147.0/';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',

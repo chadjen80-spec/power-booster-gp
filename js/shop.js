@@ -24,9 +24,10 @@
     // Starter Pack (real money, js/pay.js): not sold for coins
     { id: 'starter_ace', name: 'เอซ', rarity: 'legend', pack: true, board: 0x111111, boardAccent: 0xffd23a, flame: 0xff4a2a },
   ];
-  // what each real-money product gives; prices are set on the server (payments.js)
+  // what each real-money product gives (label: the message shown when it arrives); prices are set on the server (payments.js)
   PB.PRODUCTS = {
-    starter: { name: 'Starter Pack', coins: 1000, skin: 'starter_ace' },
+    starter: { name: 'Starter Pack', coins: 1000, skin: 'starter_ace', label: 'สกิน เอซ + 🪙 1,000' },
+    pass_s1: { name: 'Season Pass พรีเมียม', passSeason: 1, label: 'ปลดล็อกรางวัลพรีเมียมแล้ว ไปกดรับได้ที่หน้า Pass' },
   };
   PB.RARITY = RARITY;
 
@@ -82,6 +83,7 @@
       save.granted.push(p.id);
       save.coins += prod.coins || 0;
       if (prod.skin && !PB.shop.owns(prod.skin)) { save.owned.push(prod.skin); save.skin = prod.skin; }
+      if (prod.passSeason) PB.pass.unlockPremium(prod.passSeason);
       changed(); return prod;
     },
     // character def with a skin's colors applied (unknown ids fall back to the character's own colors)

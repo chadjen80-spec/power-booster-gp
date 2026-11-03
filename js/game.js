@@ -526,8 +526,10 @@
       if (rw) claimed([rw]);
     }));
     $('ps-claim').disabled = !pass.pending();
-    $('ps-buy').textContent = pass.premium ? '✔ พรีเมียมแล้ว' : `ปลดล็อก ${pass.PREMIUM_PRICE}`;
+    const price = PB.pay.priceText(pass.PREMIUM_PRODUCT);
+    $('ps-buy').textContent = pass.premium ? '✔ พรีเมียมแล้ว' : price ? `ปลดล็อก ${price}` : 'ปลดล็อกพรีเมียม';
     $('ps-buy').disabled = pass.premium;
+    $('ps-login').classList.toggle('hidden', pass.premium || !PB.pay.enabled || !!PB.account.user || !$('ps-login').dataset.asked);
     updatePassBadge();
   }
   function claimed(list) {
@@ -545,8 +547,35 @@
   }
   $('btn-pass').addEventListener('click', () => { audio.init(); goScreen('pass'); });
   $('ps-claim').addEventListener('click', () => { const got = pass.claimAll(); if (got.length) claimed(got); });
-  $('ps-buy').addEventListener('click', () => {
-    if (!pass.buyPremium()) $('ps-msg').textContent = 'ระบบชำระเงินกำลังจะเปิดเร็วๆ นี้ ระหว่างนี้เก็บ XP ไว้ก่อนได้ รางวัลพรีเมียมย้อนรับได้ทั้งหมด';
+  // premium Pass: real money through Stripe (js/pay.js); a signed-in account keeps it across devices
+  $('ps-buy').addEventListener('click', async () => {
+    const pay = PB.pay;
+    if (!pay.enabled) {
+      $('ps-msg').textContent = PB.isApp ? 'ซื้อพรีเมียมได้บนเว็บไซต์ของเกม แล้วเข้าสู่ระบบบัญชีเดียวกัน'
+        : 'ระบบชำระเงินยังไม่เปิดบนเซิร์ฟเวอร์นี้ ระหว่างนี้เก็บ XP ไว้ก่อนได้ รางวัลพรีเมียมย้อนรับได้ทั้งหมด';
+      return;
+    }
+    if (!PB.account.user) {
+      $('ps-login').dataset.asked = '1';
+      $('ps-msg').textContent = 'ใส่อีเมลเพื่อเข้าสู่ระบบก่อน แล้วกดปลดล็อกอีกครั้ง';
+      renderPass();
+      return;
+    }
+    $('ps-buy').disabled = true; $('ps-msg').textContent = 'กำลังไปหน้าชำระเงิน...';
+    try { await pay.buy(pass.PREMIUM_PRODUCT); }
+    catch (e) {
+      $('ps-msg').textContent = e.status === 409 ? 'บัญชีนี้ซื้อพรีเมียมซีซันนี้ไปแล้ว กำลังกู้คืน...' : 'เปิดหน้าชำระเงินไม่สำเร็จ ลองใหม่อีกครั้ง';
+      if (e.status === 409) pay.sync().then(renderPass).catch(() => {});
+      renderPass();
+    }
+  });
+  $('ps-send').addEventListener('click', async () => {
+    const email = $('ps-email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('ps-msg').textContent = 'ใส่อีเมลให้ถูกต้อง'; return; }
+    $('ps-send').disabled = true; $('ps-msg').textContent = 'กำลังส่ง...';
+    try { await PB.account.login(email); $('ps-msg').textContent = `ส่งลิงก์ไปที่ ${email} แล้ว เปิดอีเมลบนเครื่องนี้แล้วกดลิงก์เพื่อเข้าสู่ระบบ`; }
+    catch (e) { $('ps-msg').textContent = 'ส่งลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง (' + e.message + ')'; }
+    $('ps-send').disabled = false;
   });
   updatePassBadge();
 
@@ -568,7 +597,7 @@
     $('offer-buy').textContent = bought ? '✔ ซื้อแล้ว ของอยู่ในร้านค้า' : `ซื้อ ${price}`;
     $('offer-buy').disabled = bought || !open;
   }
-  pay.onChange = renderOffer;
+  pay.onChange = () => { renderOffer(); if (state.screen === 'pass') renderPass(); };
   setInterval(renderOffer, 30000);   // countdown
   $('offer-banner').addEventListener('click', () => { audio.init(); goScreen('offer'); });
   $('offer-send').addEventListener('click', async () => {
