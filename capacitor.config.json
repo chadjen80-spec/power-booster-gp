@@ -1,0 +1,8 @@
+{
+  "appId": "com.powerbooster.gp",
+  "appName": "Power Booster GP",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#070614"
+  }
+}

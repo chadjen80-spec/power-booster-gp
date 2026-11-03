@@ -1,10 +1,10 @@
 // Service worker: makes the game installable and lets solo races run offline.
 // Game files are fetched fresh when online; bump VERSION when the CORE list changes.
-const VERSION = 'pb-v1';
+const VERSION = 'pb-v2';
 const CDN = 'https://cdn.jsdelivr.net/npm/three@0.147.0/';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'js/fx.js', 'js/optimize.js', 'js/audio.js', 'js/net.js', 'js/chibi.js', 'js/track.js', 'js/game.js', 'js/touch.js', 'js/pwa.js',
+  'js/config.js', 'js/fx.js', 'js/optimize.js', 'js/audio.js', 'js/net.js', 'js/chibi.js', 'js/track.js', 'js/game.js', 'js/touch.js', 'js/pwa.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-64.png',
   CDN + 'build/three.min.js',
   CDN + 'examples/js/shaders/CopyShader.js',

@@ -72,5 +72,6 @@
       if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
     } catch (e) { /* iPhone Safari has no element fullscreen; the rotate prompt still guides the player */ }
   });
-  if (!document.documentElement.requestFullscreen) $('btn-fullscreen').classList.add('hidden');
+  // the Android app already runs fullscreen in landscape
+  if (!document.documentElement.requestFullscreen || PB.isApp) $('btn-fullscreen').classList.add('hidden');
 })();

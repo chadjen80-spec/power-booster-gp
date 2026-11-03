@@ -152,7 +152,9 @@
   const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } } };
   $('on-name').value = store.get('pb-name') || '';
-  $('on-server').value = store.get('pb-server') || (location.protocol.startsWith('http') ? location.host : 'localhost:3000');
+  // the web version talks to the server it was loaded from; the Android app (served from its own files) uses PB.CONFIG.server
+  const defaultServer = PB.isApp ? (PB.CONFIG.server || '') : location.protocol.startsWith('http') ? location.host : 'localhost:3000';
+  $('on-server').value = store.get('pb-server') || defaultServer;
   $('on-code').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
   async function connectAnd(msg) {
     const name = $('on-name').value.trim() || 'Player', server = $('on-server').value.trim();
@@ -183,7 +185,7 @@
     const host = PB.net.isHost();
     $('lb-code').textContent = room.code;
     // "localhost" only works on the host's own machine, so point friends at the server's LAN address instead
-    const here = location.protocol.startsWith('http') ? location.host : $('on-server').value;
+    const here = !PB.isApp && location.protocol.startsWith('http') ? location.host : $('on-server').value;
     const local = /^(localhost|127\.)/.test(here);
     $('lb-url').textContent = local && room.lan && room.lan.length ? room.lan.join(' หรือ ') : here;
     const slots = room.players.map(p => {

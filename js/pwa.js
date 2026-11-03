@@ -1,5 +1,6 @@
 // PWA: register the service worker and offer an "install as app" button where the browser supports it
 (function () {
+  if (window.PB && window.PB.isApp) return;   // the Android app already ships every file and can't be "installed" again
   // service workers only run on HTTPS or localhost
   if ('serviceWorker' in navigator && window.isSecureContext) {
     window.addEventListener('load', () => {
