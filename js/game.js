@@ -118,6 +118,7 @@
   function setMenuModel(def) {
     if (menu.model) { menu.scene.remove(menu.model.root); PB.disposeTree(menu.model.root); }
     menu.model = PB.buildRacerModel(def);
+    menu.model.rainbow = !!def.rainbow;
     menu.scene.add(menu.model.root);
   }
 
@@ -132,9 +133,10 @@
   function goScreen(name) {
     audio.sfx('select');
     state.screen = name;
-    if (name === 'title') { endRace(); show('scr-title'); }
+    if (name === 'title') { endRace(); show('scr-title'); setMenuModel(PB.shop.dress(PB.CHARACTERS[state.charIdx], PB.shop.skin)); }
     if (name === 'char') { endRace(); show('scr-char'); selectChar(state.charIdx); }
     if (name === 'track') { endRace(); show('scr-track'); }
+    if (name === 'shop') { endRace(); show('scr-shop'); openShop(); }
     if (name === 'online') { endRace(); show('scr-online'); $('on-msg').textContent = ''; }
     if (name === 'lobby') { endRace(); show('scr-lobby'); renderLobby(); $('on-msg').textContent = ''; }
     $('hud').classList.toggle('hidden', !!(name !== 'race'));
@@ -145,9 +147,10 @@
   $('btn-online').addEventListener('click', () => { audio.init(); state.mode = 'online'; goScreen('char'); });
   $('btn-char-ok').addEventListener('click', () => {
     if (state.mode === 'solo') { goScreen('track'); return; }
-    if (PB.net.room) { PB.net.send({ t: 'setChar', char: PB.CHARACTERS[state.charIdx].id }); goScreen('lobby'); }
+    if (PB.net.room) { PB.net.send({ t: 'setChar', char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin }); goScreen('lobby'); }
     else goScreen('online');
   });
+  $('btn-shop').addEventListener('click', () => { audio.init(); goScreen('shop'); });
   $('btn-race').addEventListener('click', () => startRace());
   $('btn-resume').addEventListener('click', () => togglePause(false));
   $('btn-restart').addEventListener('click', () => startRace());
@@ -179,7 +182,7 @@
     $('on-msg').textContent = 'กำลังเชื่อมต่อ...';
     try { await PB.net.connect(server); }
     catch (e) { $('on-msg').textContent = `เชื่อมต่อเซิร์ฟเวอร์ ${server} ไม่ได้ (เปิด server.js แล้วหรือยัง?)`; return; }
-    PB.net.send(Object.assign({ name, char: PB.CHARACTERS[state.charIdx].id }, msg));
+    PB.net.send(Object.assign({ name, char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin }, msg));
   }
   $('btn-create').addEventListener('click', () => connectAnd({ t: 'create' }));
   $('btn-join').addEventListener('click', () => {
@@ -293,8 +296,55 @@
     $('st-speed').style.width = c.stats.speed * 20 + '%';
     $('st-accel').style.width = c.stats.accel * 20 + '%';
     $('st-handling').style.width = c.stats.handling * 20 + '%';
-    setMenuModel(c);
+    setMenuModel(PB.shop.dress(c, PB.shop.skin));
   }
+
+  // ---------------- shop ----------------
+  // the showroom model wears whichever skin is picked in the grid, so it can be tried before buying
+  const shopUI = { sel: PB.shop.skin };
+  const hex = n => '#' + n.toString(16).padStart(6, '0');
+  const showCoins = () => document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = PB.shop.coins.toLocaleString(); });
+  PB.shop.onChange(showCoins);
+  showCoins();
+  function buildShopGrid() {
+    const grid = $('shop-grid'), def = PB.CHARACTERS[state.charIdx];
+    grid.innerHTML = PB.SKINS.map(k => {
+      const d = PB.shop.dress(def, k.id);
+      const sw = k.rainbow ? 'linear-gradient(135deg,#ff3a3a,#ffd23a,#3aff7a,#22c0ff,#b03aff)'
+        : `linear-gradient(135deg,${hex(d.board)} 55%,${hex(d.boardAccent)} 55% 75%,${hex(d.flame)} 75%)`;
+      const tag = k.id === PB.shop.skin ? '✔ ใส่อยู่' : PB.shop.owns(k.id) ? 'มีแล้ว' : `🪙 ${k.price.toLocaleString()}`;
+      return `<div class="shop-card r-${k.rarity}${k.id === shopUI.sel ? ' sel' : ''}" data-skin="${k.id}">` +
+        `<div class="sw" style="background:${sw}"></div><div class="nm">${k.name}</div><div class="pr">${tag}</div></div>`;
+    }).join('');
+    grid.querySelectorAll('.shop-card').forEach(c => c.addEventListener('click', () => { audio.sfx('select'); pickSkin(c.dataset.skin); }));
+  }
+  function pickSkin(id) {
+    shopUI.sel = id;
+    const k = PB.shop.find(id);
+    $('shop-name').textContent = k.name;
+    $('shop-rarity').textContent = PB.RARITY[k.rarity];
+    $('shop-rarity').className = 'shop-rarity r-' + k.rarity;
+    $('shop-msg').textContent = '';
+    const act = $('btn-shop-act');
+    if (id === PB.shop.skin) { act.textContent = '✔ ใส่อยู่'; act.disabled = true; }
+    else if (PB.shop.owns(id)) { act.textContent = 'ใส่สกินนี้'; act.disabled = false; }
+    else { act.textContent = `ซื้อ 🪙 ${k.price.toLocaleString()}`; act.disabled = false; }
+    buildShopGrid();
+    setMenuModel(PB.shop.dress(PB.CHARACTERS[state.charIdx], id));
+  }
+  function openShop() { pickSkin(PB.shop.skin); }
+  $('btn-shop-act').addEventListener('click', () => {
+    const id = shopUI.sel, k = PB.shop.find(id);
+    if (PB.shop.owns(id)) PB.shop.equip(id);
+    else if (!PB.shop.buy(id)) {
+      $('shop-msg').textContent = `เหรียญไม่พอ ขาดอีก 🪙 ${(k.price - PB.shop.coins).toLocaleString()} ลงแข่งเพื่อรับเหรียญ!`;
+      return;
+    }
+    audio.sfx('finish');
+    pickSkin(id);
+    $('shop-msg').textContent = 'ใส่สกินแล้ว!';
+    if (PB.net.room) PB.net.send({ t: 'setChar', char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin });
+  });
 
   // track grid with minimap previews
   function buildTrackGrid() {
@@ -849,7 +899,7 @@
         f.outer.position.z = -2.15 - 0.7 * len;
         f.core.scale.set(1, len * 0.9, 1);
         f.core.position.z = -2.15 - 0.45 * len * 0.9;
-        if (this.stage === 3) f.outer.material.color.setHSL((race.time * 2) % 1, 1, 0.6);
+        if (this.stage === 3 || (this.def.rainbow && col === this.def.flame)) f.outer.material.color.setHSL((race.time * 2) % 1, 1, 0.6);
         else f.outer.material.color.setHex(col);
       }
       m.hover.material.opacity = 0.45 + this.stage * 0.15;
@@ -1166,12 +1216,12 @@
     // grid: 4 rows x 2. Solo: 7 random bots and the player starts at the back
     if (!grid) {
       const others = PB.CHARACTERS.filter((c, i) => i !== state.charIdx).sort(() => Math.random() - 0.5).slice(0, 7);
-      grid = others.map((c, i) => ({ id: 'bot' + i, char: c.id, bot: true }));
-      grid.push({ id: 'me', char: PB.CHARACTERS[state.charIdx].id, bot: false, local: true });
+      grid = others.map((c, i) => ({ id: 'bot' + i, char: c.id, skin: PB.shop.botSkin(), bot: true }));
+      grid.push({ id: 'me', char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin, bot: false, local: true });
     }
     const myId = race.online ? PB.net.id : 'me';
     grid.forEach((g, i) => {
-      const def = PB.CHARACTERS.find(c => c.id === g.char) || PB.CHARACTERS[0];
+      const def = PB.shop.dress(PB.CHARACTERS.find(c => c.id === g.char) || PB.CHARACTERS[0], g.skin);
       const row = Math.floor(i / 2), col = i % 2;
       const idx = track.N - 4 - row * 5;
       const lat = (col ? -1 : 1) * track.W * 0.4 + (row % 2 ? 1.5 : -1.5);
@@ -1243,6 +1293,8 @@
     $('res-title').textContent = p.place === 1 ? '🏆 ชนะเลิศ! 🏆' : `จบอันดับที่ ${p.place}`;
     renderResults();
     const online = race.online;
+    const coins = PB.shop.reward(p.place, state.diff, online);
+    $('res-coins').innerHTML = `ได้รับ <b>🪙 +${coins}</b> <span>รวม ${PB.shop.coins.toLocaleString()}</span>`;
     $('btn-again').textContent = online ? (PB.net.isHost() ? 'กลับล็อบบี้ (ทุกคน)' : 'กลับล็อบบี้') : 'แข่งอีกครั้ง';
     $('btn-tracks').classList.toggle('hidden', online);
     $('scr-results').classList.add('show');
@@ -1457,13 +1509,16 @@
       if (menu.model) {
         menu.model.root.rotation.y = menu.t * 0.6;
         menu.model.root.position.y = 0.3 + Math.sin(menu.t * 2) * 0.15;
-        menu.model.flames.forEach(f => { const l = 0.6 + Math.random() * 0.2; f.outer.scale.set(1, l, 1); f.outer.position.z = -2.15 - 0.7 * l; });
+        menu.model.flames.forEach(f => {
+          const l = 0.6 + Math.random() * 0.2; f.outer.scale.set(1, l, 1); f.outer.position.z = -2.15 - 0.7 * l;
+          if (menu.model.rainbow) f.outer.material.color.setHSL((menu.t * 0.8) % 1, 1, 0.6);
+        });
         // showroom: carve gently left and right to show off the turning pose
         const steer = Math.sin(menu.t * 1.1) * 0.9;
         menu.model.body.rotation.z = -steer * 0.2;
         PB.animateRider(menu.model, { dt, steer, drift: 0, stage: 0, speed: 60, time: menu.t });
       }
-      const onRight = state.screen === 'char';
+      const onRight = state.screen === 'char' || state.screen === 'shop';
       camera.fov = 45; camera.updateProjectionMatrix();
       camera.position.set(0, 3.2, 10.5);
       camera.lookAt(onRight && window.innerWidth > 700 ? 3.2 : 0, 1.6, 0);
@@ -1542,7 +1597,7 @@
     } catch (e) { console.warn('portrait render failed', e); }
     buildCharGrid();
     buildTrackGrid();
-    setMenuModel(PB.CHARACTERS[0]);
+    setMenuModel(PB.shop.dress(PB.CHARACTERS[0], PB.shop.skin));
     $('loading').classList.add('hidden');
     requestAnimationFrame(loop);
   })();

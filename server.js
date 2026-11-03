@@ -57,10 +57,12 @@ const LAN = Object.values(os.networkInterfaces()).flat().filter(a => a && a.fami
 
 function roomInfo(room) {
   return { t: 'room', code: room.code, host: room.host, racing: room.racing, track: room.track, diff: room.diff, lan: LAN,
-    players: room.players.map(p => ({ id: p.id, name: p.name, char: p.char })) };
+    players: room.players.map(p => ({ id: p.id, name: p.name, char: p.char, skin: p.skin })) };
 }
 function cleanName(n) { return String(n || '').replace(/[<>&"]/g, '').trim().slice(0, 14) || 'Player'; }
 function cleanChar(c) { return CHAR_IDS.includes(c) ? c : CHAR_IDS[0]; }
+// shop skin id; the client falls back to the character's own colors for ids it doesn't know
+function cleanSkin(s) { return /^[a-z0-9_]{1,24}$/.test(s) ? s : 'default'; }
 
 function leave(ws) {
   const room = ws.room;
@@ -86,7 +88,7 @@ wss.on('connection', ws => {
         leave(ws);
         const r = { code: makeCode(), host: ws.id, players: [], racing: false, track: 0, diff: 1 };
         rooms.set(r.code, r);
-        r.players.push({ id: ws.id, ws, name: cleanName(m.name), char: cleanChar(m.char) });
+        r.players.push({ id: ws.id, ws, name: cleanName(m.name), char: cleanChar(m.char), skin: cleanSkin(m.skin) });
         ws.room = r;
         send(ws, { t: 'welcome', you: ws.id });
         send(ws, roomInfo(r));
@@ -98,7 +100,7 @@ wss.on('connection', ws => {
         if (r.players.length >= MAX_PLAYERS) { send(ws, { t: 'error', msg: 'ห้องเต็มแล้ว (8 คน)' }); return; }
         if (r.racing) { send(ws, { t: 'error', msg: 'ห้องนี้กำลังแข่งอยู่ รอจบรอบก่อน' }); return; }
         leave(ws);
-        r.players.push({ id: ws.id, ws, name: cleanName(m.name), char: cleanChar(m.char) });
+        r.players.push({ id: ws.id, ws, name: cleanName(m.name), char: cleanChar(m.char), skin: cleanSkin(m.skin) });
         ws.room = r;
         send(ws, { t: 'welcome', you: ws.id });
         broadcast(r, roomInfo(r));
@@ -108,6 +110,7 @@ wss.on('connection', ws => {
         if (!room) return;
         const p = room.players.find(q => q.ws === ws);
         p.char = cleanChar(m.char);
+        p.skin = cleanSkin(m.skin);
         broadcast(room, roomInfo(room));
         break;
       }
@@ -122,7 +125,7 @@ wss.on('connection', ws => {
         if (!room || room.host !== ws.id || room.racing) return;
         room.racing = true;
         // humans + bots up to 8, shuffled starting grid; bots take characters nobody picked first
-        const grid = room.players.map(p => ({ id: p.id, name: p.name, char: p.char, bot: false }));
+        const grid = room.players.map(p => ({ id: p.id, name: p.name, char: p.char, skin: p.skin, bot: false }));
         const free = CHAR_IDS.filter(c => !grid.some(g => g.char === c));
         let b = 0;
         while (grid.length < MAX_PLAYERS) {

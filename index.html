@@ -30,6 +30,10 @@
     <button class="btn big" id="btn-start">เล่นคนเดียว ▶</button>
     <button class="btn big alt" id="btn-online">เล่นออนไลน์ 🌐</button>
   </div>
+  <div class="row center">
+    <div class="coin-badge"><span class="coin-ico">🪙</span><b data-coins>0</b></div>
+    <button class="btn gold" id="btn-shop">ร้านค้า 🛒</button>
+  </div>
   <div class="diff-row quality-row">
     <span>คุณภาพกราฟิก:</span>
     <button class="chip" data-q="high">สูง</button>
@@ -72,6 +76,26 @@
     <div class="row">
       <button class="btn ghost" data-go="title">◀ กลับ</button>
       <button class="btn" id="btn-char-ok">ต่อไป ▶</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Shop ===== -->
+<section id="scr-shop" class="screen">
+  <div class="panel right-panel">
+    <div class="shop-head">
+      <h2>ร้านค้า</h2>
+      <div class="coin-badge"><span class="coin-ico">🪙</span><b data-coins>0</b></div>
+    </div>
+    <div class="shop-sub">สกินบอร์ด + ไฟ Booster • เปลี่ยนแค่สี ไม่เพิ่มความเร็ว • ใช้ได้กับทุกตัวละคร</div>
+    <div id="shop-grid" class="shop-grid"></div>
+    <div class="shop-info">
+      <div><div id="shop-name" class="shop-name"></div><div id="shop-rarity" class="shop-rarity"></div></div>
+      <div id="shop-msg" class="msg"></div>
+    </div>
+    <div class="row">
+      <button class="btn ghost" data-go="title">◀ กลับ</button>
+      <button class="btn" id="btn-shop-act"></button>
     </div>
   </div>
 </section>
@@ -184,6 +208,7 @@
   <div class="panel center-panel">
     <h2 id="res-title">ผลการแข่งขัน</h2>
     <table class="res-table"><tbody id="res-body"></tbody></table>
+    <div id="res-coins" class="res-coins"></div>
     <div class="row">
       <button class="btn" id="btn-again">แข่งอีกครั้ง</button>
       <button class="btn ghost" id="btn-tracks">เลือกด่าน</button>
@@ -211,6 +236,7 @@
 <script src="js/audio.js"></script>
 <script src="js/net.js"></script>
 <script src="js/chibi.js"></script>
+<script src="js/shop.js"></script>
 <script src="js/track.js"></script>
 <script src="js/game.js"></script>
 <script src="js/touch.js"></script>
