@@ -17,10 +17,27 @@
   const GRAVITY = 34;
   const DIFFICULTY = [{ skill: [0.78, 0.86], rubber: 0.06, item: 0.6 }, { skill: [0.86, 0.94], rubber: 0.09, item: 1 }, { skill: [0.93, 1.0], rubber: 0.12, item: 1.4 }];
 
+  // Item-slot picture of the TNT crate, matching the red box with the yellow TNT label dropped on the track
+  function tntIcon() {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d');
+    const face = (pts, fill) => { x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); x.closePath(); x.fillStyle = fill; x.fill(); x.strokeStyle = '#5a1208'; x.lineWidth = 3; x.stroke(); };
+    face([[22, 42], [64, 22], [106, 42], [64, 62]], '#f0583c');                       // top
+    face([[22, 42], [64, 62], [64, 112], [22, 92]], '#d03a20');                       // front-left
+    face([[64, 62], [106, 42], [106, 92], [64, 112]], '#9a2412');                     // front-right
+    // yellow label with TNT on the left face, as on the 3D crate
+    face([[27, 58], [59, 74], [59, 94], [27, 78]], '#ffd23a');
+    x.save(); x.transform(1, 0.5, 0, 1, 27, 58);
+    x.fillStyle = '#d03a20'; x.font = 'bold 15px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('TNT', 16, 10); x.restore();
+    face([[69, 72], [101, 56], [101, 76], [69, 92]], '#e0b020');                      // label wraps round the corner
+    return c.toDataURL();
+  }
+
   const ITEMS = {
     missile: { icon: '🚀', name: 'มิสไซล์ติดตาม' },
     bomb: { icon: '💣', name: 'ระเบิดขว้าง' },
-    mine: { icon: '🧨', name: 'กับระเบิด TNT' },
+    mine: { icon: '🧨', img: tntIcon(), name: 'กับระเบิด TNT' },
     shield: { icon: '🛡️', name: 'โล่พลังงาน' },
     turbo: { icon: '🔥', name: 'เทอร์โบ' },
     emp: { icon: '⚡', name: 'EMP ช็อกทุกคันข้างหน้า' },
@@ -1264,6 +1281,13 @@
     $('hud-standings').innerHTML = race.racers.map(() => '<li><b></b><i></i><span></span></li>').join('');
   }
   let rollIconT = 0;
+  // emoji for most items; the TNT crate uses its own drawn picture
+  function showItemIcon(slot, key) {
+    if (slot.dataset.item === (key || '')) return;
+    slot.dataset.item = key || '';
+    const it = key ? ITEMS[key] : null;
+    slot.innerHTML = it ? (it.img ? `<img src="${it.img}" alt="">` : it.icon) : '';
+  }
   function updateHUD(dt) {
     const p = race.player;
     setText('hud-pos', String(p.place));
@@ -1276,12 +1300,12 @@
     const slot = $('hud-item');
     if (p.rolling > 0) {
       rollIconT -= dt;
-      if (rollIconT <= 0) { rollIconT = 0.07; const ks = Object.keys(ITEMS); slot.textContent = ITEMS[ks[(Math.random() * ks.length) | 0]].icon; audio.sfx('item'); }
+      if (rollIconT <= 0) { rollIconT = 0.07; const ks = Object.keys(ITEMS); showItemIcon(slot, ks[(Math.random() * ks.length) | 0]); audio.sfx('item'); }
       slot.classList.add('rolling'); setText('hud-item-name', '???');
     } else {
       slot.classList.remove('rolling');
       const it = p.item ? ITEMS[p.item] : null;
-      if (slot.textContent !== (it ? it.icon : '')) slot.textContent = it ? it.icon : '';
+      showItemIcon(slot, p.item);
       setText('hud-item-name', it ? it.name + (vin.autoGas ? '' : ' [E]') : '');
     }
     // the slot only appears while an item is rolling or in hand; the touch button dims when there's nothing to use
@@ -1296,6 +1320,14 @@
     const panel = $('boost-panel');
     $('hud-gauge').style.width = (p.stage > 0 ? (p.stageTimer / p.stageDur) * 100 : p.gauge) + '%';
     panel.classList.toggle('ready', p.stage === 0 && p.gauge >= 100);
+    // touch BOOST button says which boost a tap gives: full Lv.1->3, short Lv.1 only, or not yet
+    const bstate = p.stage > 0 ? 'on' : p.gauge >= 100 ? 'full' : p.gauge >= BOOST_MIN ? 'part' : 'low';
+    if (bstate !== hudCache.bstate) {
+      hudCache.bstate = bstate;
+      const tb = document.querySelector('.t-boost');
+      tb.className = 't-btn t-boost ' + bstate;
+      tb.innerHTML = { full: 'BOOST<small>Lv.1→3</small>', part: 'BOOST<small>Lv.1</small>', low: 'BOOST<small>ชาร์จ</small>', on: 'BOOST' }[bstate];
+    }
     for (let i = 1; i <= 3; i++) panel.classList.toggle('lv' + i, p.stage === i);
     panel.querySelectorAll('.boost-lv i').forEach(e => e.classList.toggle('on', +e.dataset.lv <= p.stage));
     if (p.stage > 0) {
