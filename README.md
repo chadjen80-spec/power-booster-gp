@@ -32,6 +32,7 @@ npm start
 
 | ไฟล์ | หน้าที่ |
 |---|---|
+| `payments.js` | จ่ายเงินจริง: Stripe Checkout, webhook, ประวัติการซื้อใน Supabase |
 | `server.js` | เซิร์ฟเวอร์ Node: ส่งไฟล์เกม + ห้องเล่นออนไลน์ (WebSocket) |
 | `js/game.js` | ลูปเกม, นักแข่ง, AI, ไอเทม, Booster, HUD, ซิงก์ออนไลน์ |
 | `js/track.js` | ด่าน, ฉาก, แท่นกระโดด, สิ่งก่อสร้าง |
@@ -42,5 +43,7 @@ npm start
 | `sw.js`, `manifest.webmanifest`, `js/pwa.js` | PWA (ติดตั้งเป็นแอป / เล่นออฟไลน์) |
 
 อยากใช้โมเดลตัวละครจาก Blender: ดู `docs/BLENDER.md` (ไฟล์ตั้งต้นของทั้ง 8 ตัวอยู่ใน `models/templates/`)
+
+เปิดขาย Starter Pack ด้วยเงินจริง (Stripe + Supabase): ดู `docs/PAYMENTS.md`
 
 ดูสัญญาอนุญาตใน `LICENSE` และไลบรารีที่ใช้ใน `THIRD_PARTY_NOTICES.md`

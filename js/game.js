@@ -47,6 +47,9 @@
     { missile: 3, bomb: 3, mine: 2, shield: 2, turbo: 2 },             // 3rd-5th
     { missile: 4, turbo: 3, emp: 2, shield: 1, bomb: 1 },              // 6th-8th
   ];
+  // counts a player action for the daily missions (js/pass.js)
+  function stat(r, k) { if (r.isPlayer && race && race.stats) race.stats[k] = (race.stats[k] || 0) + 1; }
+
   function rollItem(place) {
     const t = ITEM_TABLE[place <= 2 ? 0 : place <= 5 ? 1 : 2];
     let sum = 0; for (const k in t) sum += t[k];
@@ -133,10 +136,12 @@
   function goScreen(name) {
     audio.sfx('select');
     state.screen = name;
-    if (name === 'title') { endRace(); show('scr-title'); setMenuModel(PB.shop.dress(PB.CHARACTERS[state.charIdx], PB.shop.skin)); }
+    if (name === 'title') { endRace(); show('scr-title'); setMenuModel(PB.shop.dress(PB.CHARACTERS[state.charIdx], PB.shop.skin)); updatePassBadge(); }
     if (name === 'char') { endRace(); show('scr-char'); selectChar(state.charIdx); }
     if (name === 'track') { endRace(); show('scr-track'); }
     if (name === 'shop') { endRace(); show('scr-shop'); openShop(); }
+    if (name === 'pass') { endRace(); show('scr-pass'); openPass(); }
+    if (name === 'offer') { endRace(); show('scr-offer'); $('offer-msg').textContent = ''; renderOffer(); }
     if (name === 'online') { endRace(); show('scr-online'); $('on-msg').textContent = ''; }
     if (name === 'lobby') { endRace(); show('scr-lobby'); renderLobby(); $('on-msg').textContent = ''; }
     $('hud').classList.toggle('hidden', !!(name !== 'race'));
@@ -306,13 +311,17 @@
   const showCoins = () => document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = PB.shop.coins.toLocaleString(); });
   PB.shop.onChange(showCoins);
   showCoins();
+  // color chip for a skin: board / stripe / flame on the current character
+  function swatch(id) {
+    const k = PB.shop.find(id), d = PB.shop.dress(PB.CHARACTERS[state.charIdx], id);
+    return k.rainbow ? 'linear-gradient(135deg,#ff3a3a,#ffd23a,#3aff7a,#22c0ff,#b03aff)'
+      : `linear-gradient(135deg,${hex(d.board)} 55%,${hex(d.boardAccent)} 55% 75%,${hex(d.flame)} 75%)`;
+  }
   function buildShopGrid() {
-    const grid = $('shop-grid'), def = PB.CHARACTERS[state.charIdx];
-    grid.innerHTML = PB.SKINS.map(k => {
-      const d = PB.shop.dress(def, k.id);
-      const sw = k.rainbow ? 'linear-gradient(135deg,#ff3a3a,#ffd23a,#3aff7a,#22c0ff,#b03aff)'
-        : `linear-gradient(135deg,${hex(d.board)} 55%,${hex(d.boardAccent)} 55% 75%,${hex(d.flame)} 75%)`;
-      const tag = k.id === PB.shop.skin ? '✔ ใส่อยู่' : PB.shop.owns(k.id) ? 'มีแล้ว' : `🪙 ${k.price.toLocaleString()}`;
+    const grid = $('shop-grid');
+    grid.innerHTML = PB.shop.shown().map(k => {
+      const sw = swatch(k.id);
+      const tag = k.id === PB.shop.skin ? '✔ ใส่อยู่' : PB.shop.owns(k.id) ? (k.pass ? '🎟️ Pass' : k.pack ? '🎁 Pack' : 'มีแล้ว') : `🪙 ${k.price.toLocaleString()}`;
       return `<div class="shop-card r-${k.rarity}${k.id === shopUI.sel ? ' sel' : ''}" data-skin="${k.id}">` +
         `<div class="sw" style="background:${sw}"></div><div class="nm">${k.name}</div><div class="pr">${tag}</div></div>`;
     }).join('');
@@ -344,6 +353,111 @@
     pickSkin(id);
     $('shop-msg').textContent = 'ใส่สกินแล้ว!';
     if (PB.net.room) PB.net.send({ t: 'setChar', char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin });
+  });
+
+  // ---------------- daily missions + season pass ----------------
+  const pass = PB.pass;
+  function rewardHTML(rw) {
+    if (!rw) return '';
+    if (rw.coins) return `<span class="rw-ico">🪙</span><b>${rw.coins}</b>`;
+    const k = PB.shop.find(rw.skin);
+    return `<span class="rw-sw" style="background:${swatch(k.id)}"></span><b class="r-${k.rarity}">${k.name}</b>`;
+  }
+  function updatePassBadge() { $('pass-dot').classList.toggle('hidden', !pass.pending()); }
+  function renderPass() {
+    const tier = pass.tier, pr = pass.progress();
+    $('ps-season').textContent = `ซีซัน ${pass.SEASON.id} • ${pass.SEASON.name}`;
+    $('ps-tier').textContent = tier;
+    $('ps-xpbar').style.width = (pr ? pr.into / pr.need : 1) * 100 + '%';
+    $('ps-xptext').textContent = pr ? `${pr.into.toLocaleString()} / ${pr.need.toLocaleString()} XP ถึง TIER ${tier + 1}` : 'ครบทุกขั้นแล้ว!';
+    $('ps-days').textContent = `เหลือ ${pass.daysLeft()} วัน`;
+    $('ms-reset').textContent = `ภารกิจใหม่ใน ${pass.resetIn()} ชม.`;
+    const ms = pass.missions();
+    $('ms-list').innerHTML = ms.map(m => `<li class="${m.done ? 'done' : ''}"><div class="ms-text">${m.done ? '✅ ' : ''}${m.text}` +
+      `<div class="bar"><i style="width:${(m.prog / m.target) * 100}%"></i></div></div>` +
+      `<div class="ms-prog">${m.prog}/${m.target}</div><div class="ms-rw">+${m.xp} XP<br>🪙 ${m.coins}</div></li>`).join('') +
+      `<li class="bonus ${pass.bonusDone ? 'done' : ''}"><div class="ms-text">${pass.bonusDone ? '✅ ' : '⭐ '}ทำครบทั้ง 3 ภารกิจ</div>` +
+      `<div class="ms-prog">${ms.filter(m => m.done).length}/3</div><div class="ms-rw">+${pass.ALL_DONE.xp} XP<br>🪙 ${pass.ALL_DONE.coins}</div></li>`;
+    const cell = (t, prem) => {
+      const rw = pass.tierReward(t, prem);
+      if (!rw) return '<div class="ps-cell empty"></div>';
+      const st = pass.isClaimed(t, prem) ? 'claimed' : pass.claimable(t, prem) ? 'ready' : 'locked';
+      const lock = prem && !pass.premium ? '<i class="lock">🔒</i>' : '';
+      return `<div class="ps-cell ${prem ? 'prem ' : ''}${st}" data-tier="${t}" data-prem="${prem ? 1 : 0}">${rewardHTML(rw)}${lock}` +
+        `${st === 'claimed' ? '<i class="ok">✔</i>' : ''}</div>`;
+    };
+    let cols = '';
+    for (let t = 1; t <= pass.TIERS; t++) {
+      cols += `<div class="ps-col${t <= tier ? ' reached' : ''}${t === tier + 1 ? ' next' : ''}"><div class="ps-num">${t}</div>${cell(t, false)}${cell(t, true)}</div>`;
+    }
+    $('ps-track').innerHTML = cols;
+    $('ps-track').querySelectorAll('.ps-cell.ready').forEach(c => c.addEventListener('click', () => {
+      const rw = pass.claim(+c.dataset.tier, c.dataset.prem === '1');
+      if (rw) claimed([rw]);
+    }));
+    $('ps-claim').disabled = !pass.pending();
+    $('ps-buy').textContent = pass.premium ? '✔ พรีเมียมแล้ว' : `ปลดล็อก ${pass.PREMIUM_PRICE}`;
+    $('ps-buy').disabled = pass.premium;
+    updatePassBadge();
+  }
+  function claimed(list) {
+    audio.sfx('finish');
+    const coins = list.reduce((a, r) => a + (r.coins || 0), 0), skins = list.filter(r => r.skin).map(r => PB.shop.find(r.skin).name);
+    $('ps-msg').textContent = 'ได้รับ ' + [coins ? `🪙 ${coins}` : '', ...skins.map(s => `สกิน ${s} (ใส่ได้ที่ร้านค้า)`)].filter(Boolean).join(' + ');
+    renderPass();
+  }
+  function openPass() {
+    $('ps-msg').textContent = '';
+    renderPass();
+    // scroll the reward track to the next tier to reach
+    const next = $('ps-track').querySelector('.ps-col.next') || $('ps-track').lastElementChild;
+    $('ps-track').scrollLeft = Math.max(0, next.offsetLeft - $('ps-track').clientWidth / 2);
+  }
+  $('btn-pass').addEventListener('click', () => { audio.init(); goScreen('pass'); });
+  $('ps-claim').addEventListener('click', () => { const got = pass.claimAll(); if (got.length) claimed(got); });
+  $('ps-buy').addEventListener('click', () => {
+    if (!pass.buyPremium()) $('ps-msg').textContent = 'ระบบชำระเงินกำลังจะเปิดเร็วๆ นี้ ระหว่างนี้เก็บ XP ไว้ก่อนได้ รางวัลพรีเมียมย้อนรับได้ทั้งหมด';
+  });
+  updatePassBadge();
+
+  // ---------------- Starter Pack (real money, js/pay.js) ----------------
+  const pay = PB.pay;
+  const fmtLeft = ms => { const h = Math.floor(ms / 3600e3), m = Math.floor(ms / 60e3) % 60; return `${h}:${String(m).padStart(2, '0')} ชม.`; };
+  function renderOffer() {
+    const open = pay.offerOpen(), left = fmtLeft(pay.offerLeft()), price = pay.priceText('starter');
+    $('offer-banner').classList.toggle('hidden', !open);
+    $('offer-price').textContent = price;
+    $('offer-time').textContent = `เหลือ ${left}`;
+    if (state.screen !== 'offer') return;
+    $('offer-time2').textContent = left;
+    $('offer-sw').style.background = swatch('starter_ace');
+    $('offer-login').classList.toggle('hidden', !!pay.user);
+    $('offer-account').classList.toggle('hidden', !pay.user);
+    if (pay.user) $('offer-user').textContent = pay.user.email || 'ผู้เล่น';
+    const bought = pay.bought.has('starter');
+    $('offer-buy').textContent = bought ? '✔ ซื้อแล้ว ของอยู่ในร้านค้า' : `ซื้อ ${price}`;
+    $('offer-buy').disabled = bought || !open;
+  }
+  pay.onChange = renderOffer;
+  setInterval(renderOffer, 30000);   // countdown
+  $('offer-banner').addEventListener('click', () => { audio.init(); goScreen('offer'); });
+  $('offer-send').addEventListener('click', async () => {
+    const email = $('offer-email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('offer-msg').textContent = 'ใส่อีเมลให้ถูกต้อง'; return; }
+    $('offer-send').disabled = true; $('offer-msg').textContent = 'กำลังส่ง...';
+    try { await pay.login(email); $('offer-msg').textContent = `ส่งลิงก์ไปที่ ${email} แล้ว เปิดอีเมลบนเครื่องนี้แล้วกดลิงก์เพื่อเข้าสู่ระบบ`; }
+    catch (e) { $('offer-msg').textContent = 'ส่งลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง (' + e.message + ')'; }
+    $('offer-send').disabled = false;
+  });
+  $('offer-logout').addEventListener('click', () => pay.logout());
+  $('offer-buy').addEventListener('click', async () => {
+    $('offer-buy').disabled = true; $('offer-msg').textContent = 'กำลังไปหน้าชำระเงิน...';
+    try { await pay.buy('starter'); }
+    catch (e) {
+      $('offer-msg').textContent = e.status === 409 ? 'บัญชีนี้ซื้อ Starter Pack ไปแล้ว' : 'เปิดหน้าชำระเงินไม่สำเร็จ ลองใหม่อีกครั้ง';
+      if (e.status === 409) pay.sync().catch(() => {});
+      renderOffer();
+    }
   });
 
   // track grid with minimap previews
@@ -552,6 +666,7 @@
     giveItemBox() {
       if (!this.auth) return;
       this.gauge = Math.min(100, this.gauge + 12);
+      stat(this, 'boxes');
       if (this.item || this.rolling > 0) return;
       this.pendingItem = rollItem(this.place);
       this.rolling = this.isPlayer ? 1.2 : 0.5;
@@ -562,6 +677,7 @@
       const it = this.item;
       if (!it) return;
       this.item = null;
+      stat(this, 'items');
       const ev = { e: 'item', r: this.netId, it, x: this.pos.x, y: this.pos.y, z: this.pos.z, h: this.heading, s: this.speed,
         pid: `${race.online ? PB.net.id : 'L'}-${race.pidSeq++}` };
       if (it === 'missile') {
@@ -668,6 +784,7 @@
         if (this.stageTimer <= 0) {
           if (this.stage < this.boostMax) {
             this.stage++; this.stageTimer = this.stageDur = STAGE_TIME;
+            if (this.stage === 3) stat(this, 'maxboost');
             if (this.isPlayer) { audio.sfx('boost' + this.stage); bigMsg(this.stage === 3 ? 'MAX BOOST!!' : 'BOOST Lv.' + this.stage, true); race.shake = 0.3; }
           } else { this.stage = 0; this.gauge = 0; }
         }
@@ -704,6 +821,7 @@
         if (!inp.drift || this.speed < 18 || this.spin > 0) {
           if (this.driftTime > 0.9 && this.spin <= 0) {
             this.turbo = Math.max(this.turbo, this.driftTime > 2 ? 1.2 : 0.7);
+            stat(this, 'drift');
             if (this.isPlayer) audio.sfx('turbo');
           }
           this.drifting = false;
@@ -802,7 +920,7 @@
     landed(groundY) {
       this.air = false; this.pos.y = groundY; this.vy = 0; this.land = 0.25;
       const big = this.airTime > 0.6 && this.spin <= 0;
-      if (big) this.turbo = Math.max(this.turbo, 0.5 + Math.min(this.airTime, 1.6) * 0.5);
+      if (big) { this.turbo = Math.max(this.turbo, 0.5 + Math.min(this.airTime, 1.6) * 0.5); stat(this, 'air'); }
       if (near(this)) race.particles.emit(18, { pos: this.pos.clone().add(new V3(0, 0.4, 0)), spread: 7, vel: new V3(0, 3, 0),
         color: 0xffffff, life: 0.5, size: [1.2, 0.3], drag: 3 });
       if (this.isPlayer) {
@@ -1203,7 +1321,7 @@
     const scene = new THREE.Scene();
     const tdef = PB.TRACKS[state.trackIdx];
     const track = PB.buildTrack(tdef, scene);
-    race = { scene, track, racers: [], boxes: [], projectiles: [], mines: [], effects: [], time: 0, phase: 'countdown', cd: 4.2,
+    race = { scene, track, racers: [], boxes: [], projectiles: [], mines: [], effects: [], time: 0, phase: 'countdown', cd: 4.2, stats: {},
       shake: 0, flash: 0, paused: false, standingsT: 0, finishT: 0, camPos: null, camLook: null,
       online: !!grid && PB.net.connected(), pidSeq: 0, netT: 0 };
     race.particles = new PB.fx.Particles(scene, Q.particles);
@@ -1294,7 +1412,11 @@
     renderResults();
     const online = race.online;
     const coins = PB.shop.reward(p.place, state.diff, online);
-    $('res-coins').innerHTML = `ได้รับ <b>🪙 +${coins}</b> <span>รวม ${PB.shop.coins.toLocaleString()}</span>`;
+    const ps = PB.pass.recordRace({ place: p.place, online, stats: race.stats });
+    $('res-coins').innerHTML = `ได้รับ <b>🪙 +${coins + ps.coins}</b> <b class="xp">+${ps.xp} XP</b> <span>รวม 🪙 ${PB.shop.coins.toLocaleString()}</span>`;
+    $('res-pass').innerHTML = (ps.tierAfter > ps.tierBefore ? `<div class="tier-up">🎟️ Season Pass ขึ้น TIER ${ps.tierAfter}!${PB.pass.pending() ? ' ไปรับรางวัลได้เลย' : ''}</div>` : '') +
+      ps.completed.map(t => `<div>✅ ภารกิจสำเร็จ: ${t}</div>`).join('');
+    updatePassBadge();
     $('btn-again').textContent = online ? (PB.net.isHost() ? 'กลับล็อบบี้ (ทุกคน)' : 'กลับล็อบบี้') : 'แข่งอีกครั้ง';
     $('btn-tracks').classList.toggle('hidden', online);
     $('scr-results').classList.add('show');

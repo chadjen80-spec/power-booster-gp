@@ -6,6 +6,15 @@ const path = require('path');
 const os = require('os');
 const { WebSocketServer } = require('ws');
 
+// local secrets for development: KEY=value lines in .env (never committed). Render sets them in its dashboard instead.
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+  }
+} catch (e) { /* no .env file */ }
+const payments = require('./payments');
+
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const MAX_PLAYERS = 8;
@@ -19,6 +28,7 @@ const PUBLIC = new Set(['index.html', 'css', 'js', 'icons', 'models', 'manifest.
 // ---------- static files ----------
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent(req.url.split('?')[0]);
+  if (url.startsWith('/api/')) { payments.handle(req, res, url); return; }
   const rel = path.normalize(url === '/' ? 'index.html' : url.replace(/^\/+/, ''));
   const file = path.join(ROOT, rel);
   if (!file.startsWith(ROOT) || !PUBLIC.has(rel.split(path.sep)[0])) { res.writeHead(404); res.end('Not found'); return; }
@@ -157,7 +167,7 @@ wss.on('connection', ws => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Power Booster GP server running`);
+  console.log(`Power Booster GP server running (payments ${payments.enabled ? 'on' : 'off: see docs/PAYMENTS.md'})`);
   console.log(`  This computer:  http://localhost:${PORT}`);
   for (const a of LAN) console.log(`  Same Wi-Fi/LAN: http://${a}`);
 });

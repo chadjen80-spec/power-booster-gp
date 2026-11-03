@@ -299,3 +299,99 @@ body.touch .hud-tl { left: calc(14px + env(safe-area-inset-left)); }
   .shop-name { font-size: 17px; }
   .shop-info { min-height: 0; }
 }
+
+/* ---------- daily missions + season pass ---------- */
+#btn-pass { position: relative; }
+.dot { position: absolute; top: -2px; right: -2px; width: 14px; height: 14px; border-radius: 50%; background: #ff3a5a;
+  box-shadow: 0 0 10px #ff3a5a; border: 2px solid #fff; }
+.btn.small { font-size: 14px; padding: 6px 16px; }
+.pass-panel { width: min(960px, 96vw); max-height: calc(100vh - 24px); overflow-y: auto; gap: 10px; touch-action: pan-y; }
+.ps-season { font-size: 14px; color: var(--gold); text-shadow: none; font-weight: 600; margin-left: 6px; }
+.ps-top { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; }
+.ps-tier { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 14px;
+  background: linear-gradient(160deg, var(--pink), #7a2aff); box-shadow: 0 0 16px rgba(255, 58, 208, 0.6); }
+.ps-tier small { font-size: 10px; letter-spacing: 2px; }
+.ps-tier b { font-family: 'Orbitron', sans-serif; font-size: 26px; line-height: 1; }
+.ps-xp .bar { height: 14px; }
+.ps-xp .bar i, .ms-list .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--pink)); border-radius: 6px; }
+.ps-xptext { font-size: 13px; opacity: .8; margin-top: 4px; }
+.ps-days { font-size: 13px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.ps-sec { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.ps-sec h3 { font-size: 18px; color: #fff; }
+.ps-sec small { opacity: .7; }
+.ms-list { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ms-list li { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 12px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); font-size: 14px; }
+.ms-list li.done { border-color: rgba(58, 255, 140, 0.5); background: rgba(58, 255, 140, 0.08); }
+.ms-list li.bonus { border-color: rgba(255, 210, 58, 0.5); }
+.ms-list .bar { height: 6px; margin-top: 5px; }
+.ms-prog { font-family: 'Orbitron', sans-serif; font-size: 13px; }
+.ms-rw { font-size: 11px; color: var(--gold); text-align: right; line-height: 1.3; white-space: nowrap; }
+.ps-track-wrap { display: grid; grid-template-columns: 64px 1fr; gap: 6px; }
+.ps-labels { display: grid; grid-template-rows: 20px 74px 74px; gap: 6px; font-size: 13px; font-weight: 600; }
+.ps-labels div:first-child { grid-row: 2; align-self: center; }
+.ps-labels .prem { grid-row: 3; align-self: center; color: var(--pink); }
+.ps-track { position: relative; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; touch-action: pan-x; }
+.ps-col { display: grid; grid-template-rows: 20px 74px 74px; gap: 6px; flex: 0 0 82px; }
+.ps-num { text-align: center; font-family: 'Orbitron', sans-serif; font-size: 12px; opacity: .55; }
+.ps-col.reached .ps-num { opacity: 1; color: var(--cyan); }
+.ps-col.next .ps-num { color: var(--gold); opacity: 1; }
+.ps-cell { position: relative; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); font-size: 12px; text-align: center; padding: 4px; }
+.ps-cell b { font-size: 12px; line-height: 1.1; }
+.ps-cell.prem { background: rgba(255, 58, 208, 0.08); border-color: rgba(255, 58, 208, 0.3); }
+.ps-cell.empty { background: transparent; border-style: dashed; border-color: rgba(255,255,255,0.06); }
+.ps-cell.locked { opacity: .55; }
+.ps-cell.ready { cursor: pointer; border-color: var(--gold); box-shadow: 0 0 12px rgba(255, 210, 58, 0.7); animation: ps-pulse 1.2s ease-in-out infinite; }
+.ps-cell.claimed { opacity: .45; }
+.ps-cell .lock { position: absolute; top: 2px; right: 4px; font-style: normal; font-size: 12px; }
+.ps-cell .ok { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 30px; color: #3aff8c; }
+.rw-ico { font-size: 22px; }
+.rw-sw { width: 34px; height: 34px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); }
+@keyframes ps-pulse { 50% { transform: scale(1.05); } }
+.ps-buy-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 14px; border-radius: 14px;
+  background: linear-gradient(90deg, rgba(255, 58, 208, 0.18), rgba(122, 42, 255, 0.18)); border: 1px solid rgba(255, 58, 208, 0.4); }
+.ps-buy-text { font-size: 14px; }
+.ps-buy-row .btn.big { font-size: 18px; padding: 10px 26px; white-space: nowrap; }
+#ps-msg { min-height: 1.2em; font-size: 14px; color: var(--gold); }
+.res-coins .xp { color: var(--cyan); margin-left: 8px; }
+.res-pass { text-align: center; font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+.res-pass .tier-up { color: var(--gold); font-weight: 600; font-size: 16px; }
+@media (max-width: 700px) {
+  .ms-list { grid-template-columns: 1fr; }
+  .ps-buy-row { flex-direction: column; align-items: stretch; text-align: center; }
+}
+@media (max-height: 520px) {
+  .pass-panel { max-height: calc(100vh - 16px); }
+  .ps-tier { width: 48px; height: 48px; }
+  .ps-tier b { font-size: 20px; }
+  .ms-list li { padding: 5px 10px; font-size: 13px; }
+  .ps-labels, .ps-col { grid-template-rows: 18px 60px 60px; }
+  .ps-col { flex-basis: 72px; }
+  .rw-ico { font-size: 18px; }
+  .rw-sw { width: 26px; height: 26px; }
+}
+
+/* ---------- Starter Pack (real money) ---------- */
+.offer-banner { font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  padding: 8px 20px; border-radius: 999px; color: #fff; font-size: 15px; border: 1px solid rgba(255, 210, 58, 0.8);
+  background: linear-gradient(90deg, rgba(255, 58, 208, 0.85), rgba(122, 42, 255, 0.85)); box-shadow: 0 0 22px rgba(255, 58, 208, 0.6);
+  animation: ps-pulse 1.6s ease-in-out infinite; }
+.offer-banner b { font-family: 'Orbitron', sans-serif; color: var(--gold); }
+.offer-banner em { font-style: normal; font-weight: 800; background: var(--gold); color: #1a1030; padding: 1px 10px; border-radius: 999px; }
+.offer-banner small { opacity: .85; }
+.offer-panel { gap: 12px; }
+.offer-items { display: grid; gap: 8px; }
+.offer-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--line); }
+.offer-item b { display: block; color: #fff; }
+.offer-item small { opacity: .7; font-size: 13px; }
+.offer-item .rw-sw { width: 44px; height: 44px; flex: 0 0 auto; }
+.offer-note { font-size: 13px; opacity: .85; text-align: center; }
+#offer-login, #offer-account { display: flex; flex-direction: column; gap: 8px; }
+#offer-login.hidden, #offer-account.hidden { display: none; }
+.offer-acc { font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.offer-pm { font-size: 12px; opacity: .7; text-align: center; }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 40px); opacity: 0; pointer-events: none; z-index: 60;
+  max-width: min(560px, 92vw); padding: 12px 20px; border-radius: 14px; background: var(--panel); border: 1px solid var(--gold);
+  color: #fff; text-align: center; transition: transform .25s, opacity .25s; }
+#toast.show { transform: translate(-50%, 0); opacity: 1; }

@@ -6,3 +6,6 @@ android/
 *.log
 .DS_Store
 Thumbs.db
+
+# local secrets (see .env.example)
+.env

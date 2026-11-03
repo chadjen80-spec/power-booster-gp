@@ -12,6 +12,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "stripe": "^23.1.0",
     "ws": "^8.18.0"
   }
 }

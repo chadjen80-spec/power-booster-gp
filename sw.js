@@ -1,10 +1,10 @@
 // Service worker: makes the game installable and lets solo races run offline.
 // Game files are fetched fresh when online; bump VERSION when the CORE list changes.
-const VERSION = 'pb-v4';
+const VERSION = 'pb-v6';
 const CDN = 'https://cdn.jsdelivr.net/npm/three@0.147.0/';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'js/config.js', 'js/fx.js', 'js/optimize.js', 'js/audio.js', 'js/net.js', 'js/chibi.js', 'js/shop.js', 'js/track.js', 'js/game.js', 'js/touch.js', 'js/pwa.js',
+  'js/config.js', 'js/fx.js', 'js/optimize.js', 'js/audio.js', 'js/net.js', 'js/chibi.js', 'js/shop.js', 'js/pass.js', 'js/pay.js', 'js/track.js', 'js/game.js', 'js/touch.js', 'js/pwa.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-64.png',
   CDN + 'build/three.min.js',
   CDN + 'examples/js/shaders/CopyShader.js',
@@ -36,6 +36,7 @@ self.addEventListener('fetch', e => {
   const fonts = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
   const cdn = url.href.startsWith(CDN);
   if (!sameOrigin && !fonts && !cdn) return;
+  if (sameOrigin && url.pathname.startsWith('/api/')) return;   // purchases and accounts: always live, never cached
 
   if (cdn || url.hostname === 'fonts.gstatic.com') {
     // versioned libraries and font files never change: cache first

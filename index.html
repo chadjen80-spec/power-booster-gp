@@ -26,6 +26,8 @@
     <div class="logo-main">POWER<span>BOOSTER</span></div>
     <div class="logo-sub">JET SURF GRAND PRIX</div>
   </div>
+  <button id="offer-banner" class="offer-banner hidden">🎁 <b>STARTER PACK</b> <span>สกินตำนาน เอซ + 🪙 1,000</span>
+    <em id="offer-price"></em> <small id="offer-time"></small></button>
   <div class="row center">
     <button class="btn big" id="btn-start">เล่นคนเดียว ▶</button>
     <button class="btn big alt" id="btn-online">เล่นออนไลน์ 🌐</button>
@@ -33,6 +35,7 @@
   <div class="row center">
     <div class="coin-badge"><span class="coin-ico">🪙</span><b data-coins>0</b></div>
     <button class="btn gold" id="btn-shop">ร้านค้า 🛒</button>
+    <button class="btn gold" id="btn-pass">ภารกิจ & Pass 🎟️<i id="pass-dot" class="dot hidden"></i></button>
   </div>
   <div class="diff-row quality-row">
     <span>คุณภาพกราฟิก:</span>
@@ -97,6 +100,57 @@
       <button class="btn ghost" data-go="title">◀ กลับ</button>
       <button class="btn" id="btn-shop-act"></button>
     </div>
+  </div>
+</section>
+
+<!-- ===== Daily missions + Season Pass ===== -->
+<section id="scr-pass" class="screen dim">
+  <div class="panel center-panel pass-panel">
+    <div class="shop-head">
+      <h2>Season Pass <small id="ps-season" class="ps-season"></small></h2>
+      <div class="coin-badge"><span class="coin-ico">🪙</span><b data-coins>0</b></div>
+    </div>
+    <div class="ps-top">
+      <div class="ps-tier"><small>TIER</small><b id="ps-tier">0</b></div>
+      <div class="ps-xp"><div class="bar"><i id="ps-xpbar"></i></div><div id="ps-xptext" class="ps-xptext"></div></div>
+      <div id="ps-days" class="ps-days"></div>
+    </div>
+    <div class="ps-sec"><h3>ภารกิจรายวัน</h3><small id="ms-reset"></small></div>
+    <ul id="ms-list" class="ms-list"></ul>
+    <div class="ps-sec"><h3>รางวัล</h3><button class="btn gold small" id="ps-claim">รับรางวัลทั้งหมด</button></div>
+    <div class="ps-track-wrap">
+      <div class="ps-labels"><div>ฟรี</div><div class="prem">พรีเมียม</div></div>
+      <div id="ps-track" class="ps-track"></div>
+    </div>
+    <div class="ps-buy-row">
+      <div class="ps-buy-text">ปลดล็อก <b>พรีเมียม</b> รับสกินพิเศษ 4 แบบ + 🪙 เพิ่มทุกขั้น (ย้อนรับขั้นที่ผ่านมาได้)</div>
+      <button class="btn big" id="ps-buy"></button>
+    </div>
+    <div id="ps-msg" class="msg"></div>
+    <div class="row"><button class="btn ghost" data-go="title">◀ กลับ</button></div>
+  </div>
+</section>
+
+<!-- ===== Starter Pack (real money, js/pay.js) ===== -->
+<section id="scr-offer" class="screen dim">
+  <div class="panel center-panel small wide offer-panel">
+    <h2>🎁 Starter Pack</h2>
+    <div class="offer-items">
+      <div class="offer-item"><span id="offer-sw" class="rw-sw"></span><div><b>สกินตำนาน "เอซ"</b><small>มีเฉพาะใน Starter Pack</small></div></div>
+      <div class="offer-item"><span class="rw-ico">🪙</span><div><b>1,000 เหรียญ</b><small>เอาไปซื้อสกินในร้านได้ทันที</small></div></div>
+    </div>
+    <div class="offer-note">ซื้อได้ครั้งเดียวต่อบัญชี • ข้อเสนอหมดใน <b id="offer-time2"></b></div>
+    <div id="offer-login">
+      <label class="field">อีเมล (ใช้เก็บของที่ซื้อไว้ในบัญชี ไม่หายแม้เปลี่ยนเครื่อง)<input id="offer-email" type="email" autocomplete="email" placeholder="you@example.com"></label>
+      <button class="btn" id="offer-send">ส่งลิงก์เข้าสู่ระบบ</button>
+    </div>
+    <div id="offer-account" class="hidden">
+      <div class="offer-acc">บัญชี: <b id="offer-user"></b> <button class="chip" id="offer-logout">ออกจากระบบ</button></div>
+      <button class="btn big" id="offer-buy"></button>
+      <div class="offer-pm">บัตรเครดิต/เดบิต หรือพร้อมเพย์ ชำระผ่าน Stripe</div>
+    </div>
+    <div id="offer-msg" class="msg"></div>
+    <div class="row"><button class="btn ghost" data-go="title">◀ กลับ</button></div>
   </div>
 </section>
 
@@ -209,6 +263,7 @@
     <h2 id="res-title">ผลการแข่งขัน</h2>
     <table class="res-table"><tbody id="res-body"></tbody></table>
     <div id="res-coins" class="res-coins"></div>
+    <div id="res-pass" class="res-pass"></div>
     <div class="row">
       <button class="btn" id="btn-again">แข่งอีกครั้ง</button>
       <button class="btn ghost" id="btn-tracks">เลือกด่าน</button>
@@ -219,6 +274,7 @@
 
 <div id="rotate"><div>📱↻</div><p>หมุนมือถือเป็นแนวนอนเพื่อเล่น</p></div>
 <div id="loading">กำลังโหลด...</div>
+<div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
@@ -237,6 +293,8 @@
 <script src="js/net.js"></script>
 <script src="js/chibi.js"></script>
 <script src="js/shop.js"></script>
+<script src="js/pass.js"></script>
+<script src="js/pay.js"></script>
 <script src="js/track.js"></script>
 <script src="js/game.js"></script>
 <script src="js/touch.js"></script>
