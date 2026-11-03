@@ -31,6 +31,7 @@
   <div class="row center">
     <button class="btn big" id="btn-start">เล่นคนเดียว ▶</button>
     <button class="btn big alt" id="btn-online">เล่นออนไลน์ 🌐</button>
+    <button class="btn big rank" id="btn-ranked">Ranked 🏆</button>
   </div>
   <div class="row center">
     <div class="coin-badge"><span class="coin-ico">🪙</span><b data-coins>0</b></div>
@@ -154,6 +155,41 @@
   </div>
 </section>
 
+<!-- ===== Ranked ===== -->
+<section id="scr-ranked" class="screen dim">
+  <div class="panel center-panel ranked-panel">
+    <h2>🏆 Ranked <small id="rk-season" class="ps-season"></small></h2>
+    <div id="rk-off" class="rk-off hidden"></div>
+    <div id="rk-login" class="hidden">
+      <div class="rk-note">เข้าสู่ระบบเพื่อเก็บแต้ม Ranked และขึ้นตารางอันดับ</div>
+      <label class="field">อีเมล<input id="rk-email" type="email" autocomplete="email" placeholder="you@example.com"></label>
+      <button class="btn" id="rk-send">ส่งลิงก์เข้าสู่ระบบ</button>
+    </div>
+    <div id="rk-me" class="hidden">
+      <div class="rk-card">
+        <div id="rk-icon" class="rk-icon"></div>
+        <div class="rk-info">
+          <b id="rk-tier"></b> <span id="rk-rp" class="rk-rp"></span>
+          <div class="bar"><i id="rk-bar"></i></div>
+          <small id="rk-next"></small>
+        </div>
+        <div class="rk-side"><small id="rk-stats"></small><button class="chip" id="rk-logout">ออกจากระบบ</button></div>
+      </div>
+      <div class="rk-play">
+        <label class="field">ชื่อในตารางอันดับ<input id="rk-name" maxlength="14" placeholder="ชื่อของคุณ"></label>
+        <button class="btn ghost" id="rk-char">ตัวละคร: <b id="rk-charname"></b></button>
+        <button class="btn big" id="rk-find">หาแมตช์ 🏁</button>
+      </div>
+      <div id="rk-queue" class="rk-queue hidden"><span class="spin"></span><span id="rk-qtext"></span><button class="chip" id="rk-cancel">ยกเลิก</button></div>
+    </div>
+    <div id="rk-msg" class="msg"></div>
+    <h3>ตารางอันดับ</h3>
+    <div class="rk-board-wrap"><table class="res-table rk-table"><tbody id="rk-board"></tbody></table></div>
+    <div class="rk-rules">ได้แต้มจากอันดับเทียบกับผู้เล่นจริงเท่านั้น (บอทไม่นับ) • ระดับบรอนซ์ไม่เสียแต้ม • ออกกลางคันนับเป็นอันดับสุดท้าย</div>
+    <div class="row"><button class="btn ghost" data-go="title">◀ กลับ</button></div>
+  </div>
+</section>
+
 <!-- ===== Track select ===== -->
 <section id="scr-track" class="screen">
   <div class="panel center-panel">
@@ -195,6 +231,11 @@
   <div class="panel center-panel">
     <h2>ห้อง <span id="lb-code" class="room-code"></span></h2>
     <div class="lb-hint">ส่งรหัสห้องนี้ให้เพื่อน แล้วให้เปิด <b id="lb-url"></b> → เล่นออนไลน์ → เข้าห้อง</div>
+    <div class="invite-row">
+      <button class="btn gold small" id="lb-share">📤 ส่งลิงก์ชวนเพื่อน</button>
+      <button class="btn small line" id="lb-line">แชร์ทาง LINE</button>
+      <span id="lb-share-msg" class="msg"></span>
+    </div>
     <ul id="lb-players" class="lb-players"></ul>
     <div class="lb-settings">
       <label>ด่าน <select id="lb-track"></select></label>
@@ -264,6 +305,7 @@
     <table class="res-table"><tbody id="res-body"></tbody></table>
     <div id="res-coins" class="res-coins"></div>
     <div id="res-pass" class="res-pass"></div>
+    <div id="res-ranked" class="res-ranked hidden"></div>
     <div class="row">
       <button class="btn" id="btn-again">แข่งอีกครั้ง</button>
       <button class="btn ghost" id="btn-tracks">เลือกด่าน</button>
@@ -294,6 +336,7 @@
 <script src="js/chibi.js"></script>
 <script src="js/shop.js"></script>
 <script src="js/pass.js"></script>
+<script src="js/account.js"></script>
 <script src="js/pay.js"></script>
 <script src="js/track.js"></script>
 <script src="js/game.js"></script>

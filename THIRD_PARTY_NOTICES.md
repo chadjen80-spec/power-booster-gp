@@ -9,7 +9,7 @@ use; keep this file with any copy of the game you distribute.
 | [three.js](https://github.com/mrdoob/three.js) (incl. `examples/js` post-processing: EffectComposer, RenderPass, ShaderPass, MaskPass, UnrealBloomPass, CopyShader, LuminosityHighPassShader) | 0.147.0 | 3D rendering | MIT | Loaded from the jsDelivr CDN |
 | [ws](https://github.com/websockets/ws) | 8.22.1 | Multiplayer WebSocket server | MIT | npm dependency of `server.js` |
 | [stripe-node](https://github.com/stripe/stripe-node) | 23.x | Payments (server) | MIT | npm dependency of `payments.js` |
-| [supabase-js](https://github.com/supabase/supabase-js) | 2.45.4 | Player sign-in (web) | MIT | Loaded from the jsDelivr CDN when payments are on |
+| [supabase-js](https://github.com/supabase/supabase-js) | 2.45.4 | Player sign-in (web) | MIT | Loaded from the jsDelivr CDN when player accounts are on |
 | [Kanit](https://github.com/cadsondemak/kanit) font | — | Thai UI text | SIL Open Font License 1.1 | Loaded from Google Fonts |
 | [Orbitron](https://github.com/theleagueof/orbitron) font | — | Logo / HUD text | SIL Open Font License 1.1 | Loaded from Google Fonts |
 

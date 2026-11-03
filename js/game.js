@@ -135,6 +135,7 @@
   }
   function goScreen(name) {
     audio.sfx('select');
+    if (name !== 'ranked' && rk.queued) leaveQueue();   // leaving the Ranked screen gives up the queue spot
     state.screen = name;
     if (name === 'title') { endRace(); show('scr-title'); setMenuModel(PB.shop.dress(PB.CHARACTERS[state.charIdx], PB.shop.skin)); updatePassBadge(); }
     if (name === 'char') { endRace(); show('scr-char'); selectChar(state.charIdx); }
@@ -142,6 +143,7 @@
     if (name === 'shop') { endRace(); show('scr-shop'); openShop(); }
     if (name === 'pass') { endRace(); show('scr-pass'); openPass(); }
     if (name === 'offer') { endRace(); show('scr-offer'); $('offer-msg').textContent = ''; renderOffer(); }
+    if (name === 'ranked') { endRace(); show('scr-ranked'); $('rk-msg').textContent = ''; openRanked(); }
     if (name === 'online') { endRace(); show('scr-online'); $('on-msg').textContent = ''; }
     if (name === 'lobby') { endRace(); show('scr-lobby'); renderLobby(); $('on-msg').textContent = ''; }
     $('hud').classList.toggle('hidden', !!(name !== 'race'));
@@ -152,6 +154,7 @@
   $('btn-online').addEventListener('click', () => { audio.init(); state.mode = 'online'; goScreen('char'); });
   $('btn-char-ok').addEventListener('click', () => {
     if (state.mode === 'solo') { goScreen('track'); return; }
+    if (state.mode === 'ranked') { goScreen('ranked'); return; }
     if (PB.net.room) { PB.net.send({ t: 'setChar', char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin }); goScreen('lobby'); }
     else goScreen('online');
   });
@@ -161,6 +164,7 @@
   $('btn-restart').addEventListener('click', () => startRace());
   $('btn-quit').addEventListener('click', () => { leaveOnline(); goScreen('title'); });
   $('btn-again').addEventListener('click', () => {
+    if (race && race.ranked) { leaveOnline(); goScreen('ranked'); return; }   // a ranked room is for one race
     if (!race || !race.online) { startRace(); return; }
     if (PB.net.isHost()) PB.net.send({ t: 'end' });
     else goScreen('lobby');
@@ -227,17 +231,142 @@
     $('lb-wait').textContent = room.racing ? 'ห้องนี้กำลังแข่งอยู่... รอหัวห้องพากลับล็อบบี้' : host ? 'คุณเป็นหัวห้อง เลือกด่านแล้วกดเริ่มแข่งได้เลย' : 'รอหัวห้องกดเริ่มแข่ง...';
   }
 
+  // ---------------- invite links ----------------
+  // ?room=CODE in the address joins that room straight away (read now, before anything rewrites the address)
+  const inviteCode = (() => {
+    const q = new URLSearchParams(location.search), code = (q.get('room') || '').toUpperCase();
+    if (!q.has('room')) return null;
+    q.delete('room');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+    return /^[A-Z0-9]{4}$/.test(code) ? code : null;
+  })();
+  function inviteUrl(code) {
+    const room = PB.net.room;
+    let base;
+    if (PB.isApp || !location.protocol.startsWith('http')) base = 'https://' + $('on-server').value.trim().replace(/^\w+:\/\//, '').replace(/\/+$/, '');
+    else base = /^(localhost|127\.)/.test(location.host) && room && room.lan && room.lan.length ? `http://${room.lan[0]}` : location.origin;
+    return `${base}/?room=${code}`;
+  }
+  $('lb-share').addEventListener('click', async () => {
+    const code = PB.net.room.code, url = inviteUrl(code), text = `มาแข่งเจ็ทเซิร์ฟกันใน Power Booster GP! ห้อง ${code}`;
+    // phones: the share sheet (LINE, Messenger, ...); elsewhere: copy the link
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Power Booster GP', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(`${text} ${url}`); $('lb-share-msg').textContent = 'คัดลอกลิงก์แล้ว ส่งให้เพื่อนได้เลย'; }
+    catch (e) { $('lb-share-msg').textContent = url; }
+  });
+  $('lb-line').addEventListener('click', () => {
+    window.open('https://social-plugins.line.me/lineit/share?url=' + encodeURIComponent(inviteUrl(PB.net.room.code)), '_blank', 'noopener');
+  });
+
+  // ---------------- Ranked ----------------
+  const acc = PB.account;
+  const rk = { tiers: [], top: [], me: null, season: 1, queued: false, result: null };
+  const tierInfo = id => rk.tiers.find(t => t.id === id) || { name: '', icon: '', min: 0 };
+  async function openRanked() {
+    renderRanked();
+    await acc.ready;
+    if (!acc.enabled) { renderRanked(); return; }
+    try {
+      const lb = await acc.api('/api/ranked/leaderboard');
+      Object.assign(rk, { tiers: lb.tiers, top: lb.top, season: lb.season });
+      rk.me = acc.user ? (await acc.api('/api/ranked/me')).me : null;
+    } catch (e) { $('rk-msg').textContent = 'โหลดข้อมูล Ranked ไม่สำเร็จ ลองใหม่อีกครั้ง'; }
+    renderRanked();
+  }
+  function renderRanked() {
+    const on = acc.enabled, signed = on && !!acc.user;
+    $('rk-season').textContent = `ซีซัน ${rk.season}`;
+    $('rk-off').classList.toggle('hidden', on);
+    $('rk-off').textContent = PB.isApp ? 'Ranked เล่นได้บนเว็บไซต์ของเกม' : 'Ranked ยังไม่เปิดบนเซิร์ฟเวอร์นี้ (ต้องตั้งค่า Supabase ก่อน ดู docs/PAYMENTS.md)';
+    $('rk-login').classList.toggle('hidden', !on || signed);
+    $('rk-me').classList.toggle('hidden', !signed);
+    $('rk-charname').textContent = PB.CHARACTERS[state.charIdx].name;
+    if (!$('rk-name').value) $('rk-name').value = $('on-name').value;
+    if (rk.me && rk.tiers.length) {
+      const t = tierInfo(rk.me.tier), next = rk.tiers[rk.tiers.indexOf(t) + 1];
+      $('rk-icon').textContent = t.icon;
+      $('rk-tier').textContent = t.name;
+      $('rk-rp').textContent = `${rk.me.rp.toLocaleString()} RP`;
+      $('rk-bar').style.width = (next ? (rk.me.rp - t.min) / (next.min - t.min) : 1) * 100 + '%';
+      $('rk-next').textContent = next ? `อีก ${next.min - rk.me.rp} RP ถึง ${next.icon} ${next.name}` : 'ระดับสูงสุดแล้ว!';
+      $('rk-stats').textContent = `แข่ง ${rk.me.races} • ชนะ ${rk.me.wins}`;
+    }
+    $('rk-find').classList.toggle('hidden', rk.queued);
+    $('rk-char').disabled = $('rk-name').disabled = rk.queued;
+    $('rk-queue').classList.toggle('hidden', !rk.queued);
+    $('rk-board').innerHTML = rk.top.length ? rk.top.map((r, i) => {
+      const t = tierInfo(r.tier), me = rk.me && r.name === rk.me.name && r.rp === rk.me.rp;
+      return `<tr class="${me ? 'me' : ''}"><td>${i + 1}</td><td>${t.icon} ${esc(r.name)}</td><td>${r.wins}/${r.races}</td><td>${r.rp.toLocaleString()} RP</td></tr>`;
+    }).join('') : `<tr><td colspan="4" class="rk-empty">${on ? 'ยังไม่มีใครแข่ง Ranked ซีซันนี้ เป็นคนแรกเลย!' : ''}</td></tr>`;
+  }
+  acc.onChange(() => { if (state.screen === 'ranked') openRanked(); });
+  function leaveQueue() { rk.queued = false; PB.net.send({ t: 'leaveQueue' }); }
+  $('btn-ranked').addEventListener('click', () => { audio.init(); goScreen('ranked'); });
+  $('rk-char').addEventListener('click', () => { state.mode = 'ranked'; goScreen('char'); });
+  $('rk-logout').addEventListener('click', () => { rk.me = null; acc.logout(); });
+  $('rk-send').addEventListener('click', async () => {
+    const email = $('rk-email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('rk-msg').textContent = 'ใส่อีเมลให้ถูกต้อง'; return; }
+    $('rk-send').disabled = true; $('rk-msg').textContent = 'กำลังส่ง...';
+    try { await acc.login(email); $('rk-msg').textContent = `ส่งลิงก์ไปที่ ${email} แล้ว เปิดอีเมลบนเครื่องนี้แล้วกดลิงก์เพื่อเข้าสู่ระบบ`; }
+    catch (e) { $('rk-msg').textContent = 'ส่งลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง (' + e.message + ')'; }
+    $('rk-send').disabled = false;
+  });
+  $('rk-find').addEventListener('click', async () => {
+    audio.init();
+    const name = $('rk-name').value.trim();
+    if (!name) { $('rk-msg').textContent = 'ตั้งชื่อที่จะแสดงในตารางอันดับก่อน'; return; }
+    store.set('pb-name', name); $('on-name').value = name;
+    $('rk-msg').textContent = 'กำลังเชื่อมต่อ...';
+    leaveOnline();
+    try { await PB.net.connect($('on-server').value.trim() || defaultServer); }
+    catch (e) { $('rk-msg').textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง'; return; }
+    const token = await acc.token();
+    if (!token) { $('rk-msg').textContent = 'กรุณาเข้าสู่ระบบใหม่อีกครั้ง'; return; }
+    state.mode = 'ranked';
+    PB.net.send({ t: 'rankedQueue', token, name, char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin });
+    rk.queued = true;
+    $('rk-msg').textContent = ''; $('rk-qtext').textContent = 'กำลังเข้าคิว...';
+    renderRanked();
+  });
+  $('rk-cancel').addEventListener('click', () => { leaveQueue(); renderRanked(); });
+  PB.net.on('queue', m => {
+    if (m.replaced) { rk.queued = false; $('rk-msg').textContent = 'บัญชีนี้เข้าคิวจากหน้าจออื่นแล้ว'; renderRanked(); return; }
+    if (!rk.queued) return;
+    $('rk-qtext').textContent = m.n < 2 ? `กำลังหาผู้เล่นจริงอีกอย่างน้อย 1 คน... (ในคิว ${m.n} คน)` : `พบผู้เล่น ${m.n} คน! เริ่มแข่งใน ${m.wait} วินาที`;
+  });
+  // the server's verdict on a ranked race; it can arrive before or after this player's results screen
+  PB.net.on('rankedResult', m => { rk.result = m; renderRankedResult(); });
+  function renderRankedResult() {
+    const el = $('res-ranked'), m = rk.result;
+    el.classList.toggle('hidden', !(race && race.ranked));
+    if (!m) { el.textContent = 'กำลังรอผลการแข่งของทุกคนเพื่อคำนวณแต้ม Ranked...'; return; }
+    if (m.error) { el.textContent = 'บันทึกผล Ranked ไม่สำเร็จ'; return; }
+    const why = { invalid: ' (ข้อมูลการแข่งผิดปกติ นับเป็นอันดับท้าย)', left: ' (ออกกลางคัน)', timeout: ' (หมดเวลา)' }[m.out] || '';
+    const t = tierInfo(m.tier);
+    el.innerHTML = `🏆 Ranked: อันดับ <b>${m.place}/${m.humans}</b> ในผู้เล่นจริง${why} • ` +
+      `<b class="${m.delta >= 0 ? 'up' : 'down'}">${m.delta >= 0 ? '+' : ''}${m.delta} RP</b> → ${t.icon} ${t.name} ${m.rp.toLocaleString()} RP`;
+    if (rk.me) Object.assign(rk.me, { rp: m.rp, tier: m.tier });
+  }
+
   const net = PB.net;
   net.on('room', () => {
     if (state.screen === 'online') goScreen('lobby');
     else if (state.screen === 'lobby') renderLobby();
   });
-  net.on('error', m => { $('on-msg').textContent = m.msg; });
+  net.on('error', m => {
+    if (state.screen === 'ranked') { rk.queued = false; $('rk-msg').textContent = m.msg; renderRanked(); }
+    else $('on-msg').textContent = m.msg;
+  });
   net.on('start', m => {
     state.trackIdx = m.track; state.diff = m.diff;
     togglePause(false);
     $('scr-results').classList.remove('show');
+    rk.queued = false; rk.result = null;
     startRace(m.grid);
+    race.ranked = !!m.ranked;
   });
   net.on('lobby', () => { if (state.mode === 'online') goScreen('lobby'); });
   net.on('state', m => {
@@ -269,6 +398,7 @@
     if (r && r.ctrl === 'remote') { r.ctrl = 'bot'; r.net = null; bigMsg(`${r.name} ออกจากเกม`, true); }
   });
   net.on('disconnect', () => {
+    if (rk.queued) { rk.queued = false; $('rk-msg').textContent = 'หลุดจากเซิร์ฟเวอร์'; renderRanked(); }
     if (race && race.online) {
       // finish the race offline: everyone else becomes a local bot
       race.online = false;
@@ -1345,7 +1475,7 @@
       const lat = (col ? -1 : 1) * track.W * 0.4 + (row % 2 ? 1.5 : -1.5);
       const mine = g.id === myId;
       const r = new Racer(def, mine, track, idx, lat, scene, state.diff,
-        { ctrl: mine ? 'local' : g.bot ? 'bot' : 'remote', netId: g.id, name: g.name || def.name });
+        { ctrl: mine ? 'local' : g.bot ? 'bot' : 'remote', netId: g.id, name: (g.tier ? g.tier + ' ' : '') + (g.name || def.name) });
       r.lap = 0;
       race.racers.push(r);
     });
@@ -1417,8 +1547,9 @@
     $('res-pass').innerHTML = (ps.tierAfter > ps.tierBefore ? `<div class="tier-up">🎟️ Season Pass ขึ้น TIER ${ps.tierAfter}!${PB.pass.pending() ? ' ไปรับรางวัลได้เลย' : ''}</div>` : '') +
       ps.completed.map(t => `<div>✅ ภารกิจสำเร็จ: ${t}</div>`).join('');
     updatePassBadge();
-    $('btn-again').textContent = online ? (PB.net.isHost() ? 'กลับล็อบบี้ (ทุกคน)' : 'กลับล็อบบี้') : 'แข่งอีกครั้ง';
-    $('btn-tracks').classList.toggle('hidden', online);
+    $('btn-again').textContent = race.ranked ? 'Ranked อีกรอบ' : online ? (PB.net.isHost() ? 'กลับล็อบบี้ (ทุกคน)' : 'กลับล็อบบี้') : 'แข่งอีกครั้ง';
+    $('btn-tracks').classList.toggle('hidden', online || !!race.ranked);
+    renderRankedResult();
     $('scr-results').classList.add('show');
     audio.stopEngine();
   }
@@ -1722,5 +1853,6 @@
     setMenuModel(PB.shop.dress(PB.CHARACTERS[0], PB.shop.skin));
     $('loading').classList.add('hidden');
     requestAnimationFrame(loop);
+    if (inviteCode) { state.mode = 'online'; goScreen('online'); $('on-code').value = inviteCode; connectAnd({ t: 'join', code: inviteCode }); }
   })();
 })();

@@ -17,3 +17,32 @@ create unique index if not exists purchases_one_starter on public.purchases (use
 alter table public.purchases enable row level security;
 drop policy if exists "read own purchases" on public.purchases;
 create policy "read own purchases" on public.purchases for select using (auth.uid() = user_id);
+
+-- Ranked: one row per player per season, written only by the game server (ranked.js)
+create table if not exists public.ranked (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  season integer not null,
+  name text not null,
+  rp integer not null default 0,
+  wins integer not null default 0,
+  races integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, season)
+);
+create index if not exists ranked_leaderboard on public.ranked (season, rp desc);
+
+-- every ranked race result, for checking disputes and cheating reports
+create table if not exists public.ranked_results (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  season integer not null,
+  place integer not null,
+  humans integer not null,
+  rp_delta integer not null,
+  reason text,                            -- null, 'left', 'timeout' or 'invalid' (lap times the server rejected)
+  created_at timestamptz not null default now()
+);
+
+-- the leaderboard is served by the game server; players never touch these tables directly
+alter table public.ranked enable row level security;
+alter table public.ranked_results enable row level security;

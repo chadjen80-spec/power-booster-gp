@@ -395,3 +395,48 @@ body.touch .hud-tl { left: calc(14px + env(safe-area-inset-left)); }
   max-width: min(560px, 92vw); padding: 12px 20px; border-radius: 14px; background: var(--panel); border: 1px solid var(--gold);
   color: #fff; text-align: center; transition: transform .25s, opacity .25s; }
 #toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+/* ---------- Ranked + invites ---------- */
+.btn.big.rank { background: linear-gradient(90deg, #ffb020, var(--gold)); color: #1a1030; box-shadow: 0 0 22px rgba(255, 190, 40, 0.7); }
+.invite-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn.line { background: #06c755; color: #fff; box-shadow: 0 0 14px rgba(6, 199, 85, 0.5); }
+#lb-share-msg { font-size: 13px; word-break: break-all; }
+.ranked-panel { width: min(720px, 96vw); max-height: calc(100vh - 24px); overflow-y: auto; gap: 10px; touch-action: pan-y; }
+.ranked-panel h3 { font-size: 18px; color: #fff; margin-top: 4px; }
+.rk-off { padding: 12px; border-radius: 12px; border: 1px dashed var(--line); text-align: center; opacity: .85; }
+.rk-note { font-size: 14px; opacity: .85; }
+#rk-login, #rk-me { display: flex; flex-direction: column; gap: 8px; }
+#rk-login.hidden, #rk-me.hidden { display: none; }
+.rk-card { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 14px;
+  background: linear-gradient(90deg, rgba(255, 190, 40, 0.16), rgba(122, 42, 255, 0.14)); border: 1px solid rgba(255, 210, 58, 0.45); }
+.rk-icon { font-size: 44px; line-height: 1; }
+.rk-info b { font-size: 20px; color: #fff; }
+.rk-rp { font-family: 'Orbitron', sans-serif; color: var(--gold); margin-left: 6px; }
+.rk-info .bar { height: 8px; margin: 6px 0 3px; }
+.rk-info .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--pink)); border-radius: 6px; }
+.rk-info small, .rk-side small { opacity: .8; font-size: 12px; }
+.rk-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.rk-play { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: end; }
+.rk-play .field { margin: 0; }
+.rk-queue { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: rgba(34, 240, 255, 0.08); border: 1px solid rgba(34, 240, 255, 0.4); }
+.rk-queue.hidden { display: none; }
+.rk-queue .chip { margin-left: auto; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--cyan); animation: rk-spin .8s linear infinite; flex: 0 0 auto; }
+@keyframes rk-spin { to { transform: rotate(360deg); } }
+.rk-board-wrap { max-height: 240px; overflow-y: auto; }
+.rk-table { width: 100%; }
+.rk-table td:nth-child(3) { font-size: 13px; opacity: .75; text-align: center; }
+.rk-empty { text-align: center !important; opacity: .7; font-family: inherit !important; }
+.rk-rules { font-size: 12px; opacity: .65; text-align: center; }
+.res-ranked { text-align: center; font-size: 15px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 190, 40, 0.12); border: 1px solid rgba(255, 210, 58, 0.4); }
+.res-ranked .up { color: #3aff8c; } .res-ranked .down { color: #ff6a7a; }
+@media (max-width: 700px) {
+  .rk-play { grid-template-columns: 1fr; }
+  .rk-card { grid-template-columns: auto 1fr; }
+  .rk-side { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; }
+}
+@media (max-height: 520px) {
+  .ranked-panel { max-height: calc(100vh - 16px); }
+  .rk-icon { font-size: 32px; }
+  .rk-board-wrap { max-height: 160px; }
+}

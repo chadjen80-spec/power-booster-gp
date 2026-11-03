@@ -1,17 +1,17 @@
 // Real-money purchases (web version): Stripe Checkout takes the payment, Supabase holds player accounts and the
 // purchase record. Only this server decides what was paid for; the game grants items from GET /api/purchases.
-// Off until all the keys below are set (see docs/PAYMENTS.md).
+// Off until the Stripe keys and the Supabase keys (supabase.js) are set (see docs/PAYMENTS.md).
 const Stripe = require('stripe');
+const sb = require('./supabase');
 
 const env = process.env;
-const KEYS = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
-const enabled = KEYS.every(k => env[k]);
+const enabled = !!(sb.enabled && env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET);
 const stripe = enabled ? Stripe(env.STRIPE_SECRET_KEY) : null;
 
 // price list; amounts in satang (3500 = 35.00 baht). What each product contains is in js/shop.js (PB.PRODUCTS).
 const PRODUCTS = { starter: { name: 'Starter Pack — Power Booster GP', amount: 3500, currency: 'thb', once: true } };
 
-function json(res, code, body) {
+function json(res, code, body) {   // also used by ranked.js
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
 }
@@ -25,25 +25,11 @@ function readBody(req, limit = 64 * 1024) {
 }
 
 // the Supabase user behind the request's access token, or null
-async function userFrom(req) {
+function userFrom(req) {
   const m = /^Bearer (.+)$/.exec(req.headers.authorization || '');
-  if (!m) return null;
-  const r = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, { headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${m[1]}` } });
-  if (!r.ok) return null;
-  const u = await r.json();
-  return u && u.id ? u : null;
+  return m ? sb.userFromToken(m[1]) : null;
 }
-// Supabase REST with the service role key (bypasses row level security: server only, never sent to the game)
-function db(query, opts = {}) {
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  return fetch(`${env.SUPABASE_URL}/rest/v1/${query}`, Object.assign({}, opts,
-    { headers: Object.assign({ apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, opts.headers) }));
-}
-async function purchasesOf(userId) {
-  const r = await db(`purchases?user_id=eq.${encodeURIComponent(userId)}&select=id,product,created_at&order=id`);
-  if (!r.ok) throw new Error(`supabase ${r.status} ${await r.text()}`);
-  return r.json();
-}
+const purchasesOf = userId => sb.rows(`purchases?user_id=eq.${encodeURIComponent(userId)}&select=id,product,created_at&order=id`);
 function origin(req) {
   if (env.PUBLIC_URL) return env.PUBLIC_URL.replace(/\/+$/, '');
   return `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`;
@@ -54,7 +40,7 @@ async function recordPaid(session) {
   if (session.payment_status !== 'paid') return false;   // PromptPay can still be pending; async_payment_succeeded follows
   const product = session.metadata && session.metadata.product, user = session.client_reference_id;
   if (!PRODUCTS[product] || !user) return false;
-  const r = await db('purchases?on_conflict=stripe_session', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates' },
+  const r = await sb.db('purchases?on_conflict=stripe_session', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates' },
     body: JSON.stringify({ user_id: user, product, stripe_session: session.id, amount: session.amount_total, currency: session.currency }) });
   if (r.status === 409) {
     // a one-time product paid twice (two checkouts opened at once): the database keeps one, the other needs a refund
@@ -67,11 +53,11 @@ async function recordPaid(session) {
 
 async function route(req, res, url) {
   if (url === '/api/config' && req.method === 'GET') {
-    // the anon key is public by design; row level security protects the data
-    return json(res, 200, enabled
-      ? { payments: true, supabaseUrl: env.SUPABASE_URL, supabaseAnonKey: env.SUPABASE_ANON_KEY,
-        products: Object.fromEntries(Object.entries(PRODUCTS).map(([id, p]) => [id, { amount: p.amount, currency: p.currency }])) }
-      : { payments: false });
+    // accounts: sign-in for Ranked and purchases. The anon key is public by design; row level security protects the data.
+    const cfg = { accounts: sb.enabled, payments: enabled };
+    if (sb.enabled) Object.assign(cfg, { supabaseUrl: env.SUPABASE_URL, supabaseAnonKey: env.SUPABASE_ANON_KEY });
+    if (enabled) cfg.products = Object.fromEntries(Object.entries(PRODUCTS).map(([id, p]) => [id, { amount: p.amount, currency: p.currency }]));
+    return json(res, 200, cfg);
   }
   if (!enabled) return json(res, 503, { error: 'payments are not set up on this server' });
 
@@ -133,3 +119,5 @@ exports.handle = (req, res, url) => {
   });
 };
 exports.enabled = enabled;
+exports.json = json;
+exports.userFrom = userFrom;

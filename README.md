@@ -32,6 +32,8 @@ npm start
 
 | ไฟล์ | หน้าที่ |
 |---|---|
+| `ranked.js` | Ranked: แต้ม RP, ระดับ, ตารางอันดับ (คิวและการตัดสินอันดับอยู่ใน `server.js`) |
+| `supabase.js` | บัญชีผู้เล่นและฐานข้อมูล Supabase ฝั่งเซิร์ฟเวอร์ |
 | `payments.js` | จ่ายเงินจริง: Stripe Checkout, webhook, ประวัติการซื้อใน Supabase |
 | `server.js` | เซิร์ฟเวอร์ Node: ส่งไฟล์เกม + ห้องเล่นออนไลน์ (WebSocket) |
 | `js/game.js` | ลูปเกม, นักแข่ง, AI, ไอเทม, Booster, HUD, ซิงก์ออนไลน์ |
@@ -44,6 +46,6 @@ npm start
 
 อยากใช้โมเดลตัวละครจาก Blender: ดู `docs/BLENDER.md` (ไฟล์ตั้งต้นของทั้ง 8 ตัวอยู่ใน `models/templates/`)
 
-เปิดขาย Starter Pack ด้วยเงินจริง (Stripe + Supabase): ดู `docs/PAYMENTS.md`
+เปิด Ranked + ตารางอันดับ (Supabase) และขาย Starter Pack ด้วยเงินจริง (Stripe): ดู `docs/PAYMENTS.md`
 
 ดูสัญญาอนุญาตใน `LICENSE` และไลบรารีที่ใช้ใน `THIRD_PARTY_NOTICES.md`
