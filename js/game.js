@@ -1535,12 +1535,15 @@
   PB.renderer = renderer;
 
   // ---------------- boot ----------------
-  try {
-    portraits = PB.renderPortraits();
-  } catch (e) { console.warn('portrait render failed', e); }
-  buildCharGrid();
-  buildTrackGrid();
-  setMenuModel(PB.CHARACTERS[0]);
-  $('loading').classList.add('hidden');
-  requestAnimationFrame(loop);
+  (async () => {
+    await PB.loadModels();   // Blender models in models/, if any (js/chibi.js)
+    try {
+      portraits = PB.renderPortraits();
+    } catch (e) { console.warn('portrait render failed', e); }
+    buildCharGrid();
+    buildTrackGrid();
+    setMenuModel(PB.CHARACTERS[0]);
+    $('loading').classList.add('hidden');
+    requestAnimationFrame(loop);
+  })();
 })();

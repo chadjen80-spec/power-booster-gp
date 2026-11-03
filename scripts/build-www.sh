@@ -15,11 +15,17 @@ FILES=(
   examples/js/postprocessing/MaskPass.js
   examples/js/postprocessing/UnrealBloomPass.js
   examples/js/utils/BufferGeometryUtils.js
+  examples/js/loaders/GLTFLoader.js
 )
 
 rm -rf www
 mkdir -p www/vendor
 cp -r index.html css js icons manifest.webmanifest www/
+# Blender characters (models/<id>.glb), if any; the starter files in models/templates stay out of the app
+mkdir -p www/models
+if ls models/*.glb >/dev/null 2>&1; then cp models/*.glb www/models/; fi
+# the list the game reads to know which characters have a model
+( cd www/models && printf '[%s]\n' "$(ls *.glb 2>/dev/null | sed 's/.*/"&"/' | paste -sd, -)" ) > www/models/index.json
 for f in "${FILES[@]}"; do
   curl -fsSL "$CDN/$f" -o "www/vendor/$(basename "$f")"
 done

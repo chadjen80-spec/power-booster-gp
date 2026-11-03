@@ -13,8 +13,8 @@ const MAX_TRACK = 4;   // highest index in PB.TRACKS (js/track.js)
 const CHAR_IDS = ['nova', 'blaze', 'frost', 'leaf', 'ruby', 'dusk', 'sky', 'sunny'];
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json',
-  '.webmanifest': 'application/manifest+json; charset=utf-8' };
-const PUBLIC = new Set(['index.html', 'css', 'js', 'icons', 'manifest.webmanifest', 'sw.js']);
+  '.webmanifest': 'application/manifest+json; charset=utf-8', '.glb': 'model/gltf-binary' };
+const PUBLIC = new Set(['index.html', 'css', 'js', 'icons', 'models', 'manifest.webmanifest', 'sw.js']);
 
 // ---------- static files ----------
 const server = http.createServer((req, res) => {
@@ -22,6 +22,14 @@ const server = http.createServer((req, res) => {
   const rel = path.normalize(url === '/' ? 'index.html' : url.replace(/^\/+/, ''));
   const file = path.join(ROOT, rel);
   if (!file.startsWith(ROOT) || !PUBLIC.has(rel.split(path.sep)[0])) { res.writeHead(404); res.end('Not found'); return; }
+  // list of Blender character models, so the game only requests files that exist
+  if (rel === path.join('models', 'index.json')) {
+    fs.readdir(path.join(ROOT, 'models'), (err, names) => {
+      res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache' });
+      res.end(JSON.stringify((names || []).filter(n => n.endsWith('.glb'))));
+    });
+    return;
+  }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });

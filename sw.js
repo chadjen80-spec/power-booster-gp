@@ -1,6 +1,6 @@
 // Service worker: makes the game installable and lets solo races run offline.
 // Game files are fetched fresh when online; bump VERSION when the CORE list changes.
-const VERSION = 'pb-v2';
+const VERSION = 'pb-v3';
 const CDN = 'https://cdn.jsdelivr.net/npm/three@0.147.0/';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
@@ -15,6 +15,7 @@ const CORE = [
   CDN + 'examples/js/postprocessing/MaskPass.js',
   CDN + 'examples/js/postprocessing/UnrealBloomPass.js',
   CDN + 'examples/js/utils/BufferGeometryUtils.js',
+  CDN + 'examples/js/loaders/GLTFLoader.js',
 ];
 
 self.addEventListener('install', e => {

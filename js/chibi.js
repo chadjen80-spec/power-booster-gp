@@ -133,7 +133,7 @@
     const skinM = toon(def.skin), hairM = toon(def.hair);
     mesh(sphere(HEAD_R, 32, 24), skinM, 0, 0, 0, head);
     const sway = head.userData.sway = [];   // hair groups that swing with turns and wind
-    const swing = (g, side, w) => sway.push({ g, side, w, z: g.rotation.z, x: g.rotation.x });
+    const swing = (g, side, w) => { g.name = 'Hair' + (side < 0 ? 'R' : side > 0 ? 'L' : 'Back') + sway.length; sway.push({ g, side, w, z: g.rotation.z, x: g.rotation.x }); };
     const face = new THREE.Mesh(
       new THREE.SphereGeometry(HEAD_R + 0.006, 40, 20, FACE.phiStart, FACE.phiLen, FACE.thetaStart, FACE.thetaLen),
       new THREE.MeshBasicMaterial({ map: faceTexture(def), transparent: true, depthWrite: false }));
@@ -238,10 +238,11 @@
   // Posable parts: legs (squash to crouch, pivot at the feet) and upper body (pivot at the hips)
   const HIP_Y = 0.6;
   function buildRider(def) {
-    const rider = new THREE.Group();
-    const legs = new THREE.Group();
+    // node names are the contract with Blender models (see docs/BLENDER.md)
+    const rider = new THREE.Group(); rider.name = 'Rider';
+    const legs = new THREE.Group(); legs.name = 'Legs';
     rider.add(legs);
-    const upper = new THREE.Group();
+    const upper = new THREE.Group(); upper.name = 'Upper';
     upper.position.y = HIP_Y;
     rider.add(upper);
     const body = new THREE.Group();   // children use rider-space heights
@@ -266,7 +267,7 @@
     // arms out for balance
     const arms = [];
     for (const s of [-1, 1]) {
-      const sh = new THREE.Group(); sh.position.set(s * 0.3, 1.18, 0); sh.rotation.z = s * 1.05; body.add(sh);
+      const sh = new THREE.Group(); sh.name = s < 0 ? 'ArmR' : 'ArmL'; sh.position.set(s * 0.3, 1.18, 0); sh.rotation.z = s * 1.05; body.add(sh);
       mesh(capsule(0.1, 0.28), shirtM, 0, -0.2, 0, sh);
       mesh(sphere(0.13), skinM, 0, -0.48, 0, sh);
       arms.push(sh);
@@ -282,6 +283,7 @@
       }
     }
     const head = buildHead(def);
+    head.name = 'Head';
     head.position.y = 2.05;
     head.scale.set(1.04, 0.97, 1);
     body.add(head);
@@ -347,7 +349,7 @@
 
     // crouch on bent legs, lean and twist the upper body into the turn
     m.legs.scale.y = 1 - a.crouch * 0.32;
-    m.upper.position.y = HIP_Y * (1 - a.crouch * 0.32);
+    m.upper.position.y = m.hipY * (1 - a.crouch * 0.32);
     m.upper.rotation.set(0.12 * a.crouch + p.stage * 0.05, a.lean * 0.3, -a.lean * 0.3);
     m.head.rotation.set(-0.08 * a.crouch, a.lean * 0.3, -a.lean * 0.12);
     // inner arm reaches forward and down toward the board, outer arm swings out and back for balance
@@ -371,6 +373,51 @@
   };
 
   // Full racer model. Hierarchy: root(yaw/pitch) > body(roll/spin/bob) > board + rider
+  // ---------- Blender models (.glb) ----------
+  // Drop models/<character id>.glb into the project (or set def.model) and that character uses it instead of
+  // the built-in chibi. Parts are found by object name so the riding animation still works; see docs/BLENDER.md.
+  const RIDER_HEIGHT = 2.9;   // feet to top of head in game units (= metres in Blender)
+  PB.loadModels = async function () {
+    if (!THREE.GLTFLoader) return;
+    const loader = new THREE.GLTFLoader();
+    // models/index.json lists the .glb files present (served by server.js, written by scripts/build-www.sh)
+    let files = [];
+    try { const res = await fetch('models/index.json', { cache: 'no-cache' }); if (res.ok) files = await res.json(); } catch (e) { /* offline or file:// */ }
+    await Promise.all(PB.CHARACTERS.map(async def => {
+      const url = def.model || (files.includes(def.id + '.glb') ? `models/${def.id}.glb` : null);
+      if (!url) return;   // no model for this character: keep the built-in chibi
+      try { def._gltf = (await loader.loadAsync(url)).scene; }
+      catch (e) { console.warn(`model ${url} could not be loaded, using the built-in chibi`, e); }
+    }));
+  };
+
+  function buildGltfRider(def) {
+    const src = def._gltf.clone(true);
+    const rider = new THREE.Group(); rider.name = 'Rider';
+    // size it so the feet sit on the board and the character is chibi-height, whatever units it was made in
+    const box = new THREE.Box3().setFromObject(src), size = box.getSize(new V3());
+    const k = size.y > 0 ? RIDER_HEIGHT / size.y : 1;
+    src.scale.multiplyScalar(k);
+    src.position.set(-(box.min.x + size.x / 2) * k, -box.min.y * k, -(box.min.z + size.z / 2) * k);
+    rider.add(src);
+    src.traverse(o => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      // lit Blender materials get the game's toon shading; unlit ones (e.g. a painted face) stay as they are
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      const toonMats = mats.map(m => m.isMeshStandardMaterial ? toon(m.color.getHex(), {
+        map: m.map, transparent: m.transparent, opacity: m.opacity, alphaTest: m.alphaTest, side: m.side }) : m);
+      o.material = Array.isArray(o.material) ? toonMats : toonMats[0];
+    });
+    const find = name => src.getObjectByName(name) || new THREE.Object3D();   // missing part: animate a dummy
+    const upper = find('Upper');
+    const head = find('Head');
+    const hair = [];
+    src.traverse(o => { if (/^Hair/i.test(o.name)) hair.push({ g: o, side: Math.sign(o.position.x), w: 1, z: o.rotation.z, x: o.rotation.x }); });
+    head.userData.sway = hair;
+    return { rider, legs: find('Legs'), upper, head, arms: [find('ArmR'), find('ArmL')], hipY: upper.position.y };
+  }
+
   PB.buildRacerModel = function (def) {
     const root = new THREE.Group();
     root.rotation.order = 'YXZ';
@@ -379,7 +426,7 @@
     const board = buildBoard(def);
     board.group.position.y = 0.45;
     body.add(board.group);
-    const r = buildRider(def);
+    const r = def._gltf ? buildGltfRider(def) : buildRider(def);
     r.rider.position.set(0, 0.62, -0.1);
     r.rider.rotation.y = 0.25;
     body.add(r.rider);
@@ -392,6 +439,7 @@
     board.flames.forEach(f => { keep.add(f.outer); keep.add(f.core); });
     PB.optimize.mergeRigid(root, keep);
     return { root, body, rider: r.rider, legs: r.legs, upper: r.upper, head: r.head, arms: r.arms, hair: r.head.userData.sway,
+      hipY: r.hipY == null ? HIP_Y : r.hipY,
       board: board.group, flames: board.flames, hover: board.hover, shield,
       anim: { lean: 0, leanV: 0, crouch: 0, sway: 0, swayV: 0, air: 0 } };
   };

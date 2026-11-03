@@ -41,4 +41,6 @@ npm start
 | `js/touch.js` | ปุ่มควบคุมบนมือถือ |
 | `sw.js`, `manifest.webmanifest`, `js/pwa.js` | PWA (ติดตั้งเป็นแอป / เล่นออฟไลน์) |
 
+อยากใช้โมเดลตัวละครจาก Blender: ดู `docs/BLENDER.md` (ไฟล์ตั้งต้นของทั้ง 8 ตัวอยู่ใน `models/templates/`)
+
 ดูสัญญาอนุญาตใน `LICENSE` และไลบรารีที่ใช้ใน `THIRD_PARTY_NOTICES.md`
