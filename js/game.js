@@ -2134,7 +2134,7 @@
       camera.fov = 45; camera.updateProjectionMatrix();
       camera.position.set(0, 3.2, 10.5);
       camera.lookAt(window.innerWidth > 560 ? (onRight ? 3.2 : onLeft ? -2.8 : 0) : 0, 1.6, 0);
-      post.bloom.strength = 0.7; post.bloom.radius = 0.5; post.bloom.threshold = 0.75;
+      post.bloom.strength = 0.7; post.bloom.radius = 0.5; post.bloom.threshold = 0.86;
       post.u.uSat.value = 1.12; post.u.uContrast.value = 1.05;
       renderScene(menu.scene);
       pressed.clear();

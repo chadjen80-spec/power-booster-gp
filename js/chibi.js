@@ -1,4 +1,4 @@
-// Chibi 3D riders (MapleStory 2 style: huge head, painted anime face, stubby rounded body, toon shading) on jet surfboards
+// Chibi 3D riders (anime figure style: big glossy hair, large painted anime eyes, slim 2.5-head body, soft shading) on jet surfboards
 (function () {
   const PB = window.PB = window.PB || {};
   const V3 = THREE.Vector3;
@@ -45,6 +45,9 @@
   const glow = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: opacity == null ? 0.9 : opacity,
     blending: THREE.AdditiveBlending, depthWrite: false });
   PB.toon = toon; PB.glow = glow;
+  // riders: smooth, slightly glossy shading (like a painted vinyl figure); a little self-light keeps them readable at night
+  const soft = (color, rough, extra) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: rough == null ? 0.6 : rough, metalness: 0,
+    emissive: new THREE.Color(color).multiplyScalar(0.07) }, extra || {}));
 
   function mesh(geo, mat, x, y, z, parent, shadow) {
     const m = new THREE.Mesh(geo, mat);
@@ -73,7 +76,7 @@
     const hex = col => '#' + col.getHexString();
     const deep = hex(ec.clone().multiplyScalar(0.35)), mid = hex(ec), light = hex(ec.clone().lerp(new THREE.Color(1, 1, 1), 0.5));
     for (const s of [-1, 1]) {
-      const cx = 256 + s * 94, cy = 132, w = 42, h = 56;
+      const cx = 256 + s * 100, cy = 148, w = 50, h = 68;
       // eye white, used as clip for the iris
       x.save();
       x.fillStyle = '#ffffff'; ellipse(x, cx, cy + 4, w, h - 4); x.fill();
@@ -87,13 +90,13 @@
       x.restore();
       // sparkles
       x.fillStyle = '#ffffff';
-      ellipse(x, cx - 13, cy - 16, 13, 17); x.fill();
-      ellipse(x, cx + 14, cy + 28, 6, 6); x.fill();
-      ellipse(x, cx + 4, cy - 30, 4, 4); x.fill();
+      ellipse(x, cx - 16, cy - 20, 15, 20); x.fill();
+      ellipse(x, cx + 17, cy + 32, 7, 7); x.fill();
+      ellipse(x, cx + 6, cy - 36, 5, 5); x.fill();
       // thick upper lash
       x.strokeStyle = '#1c1024'; x.lineCap = 'round';
-      x.lineWidth = def.lashes ? 11 : 9;
-      x.beginPath(); x.ellipse(cx, cy + 6, w + 3, h, 0, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
+      x.lineWidth = def.lashes ? 13 : 10;
+      x.beginPath(); x.ellipse(cx, cy + 6, w + 4, h, 0, Math.PI * 1.08, Math.PI * 1.92); x.stroke();
       if (def.lashes) {
         // outer wing
         const ox = cx + s * (w - 2), oy = cy - 26;
@@ -106,21 +109,22 @@
       x.beginPath(); x.ellipse(cx, cy + 2, w - 4, h - 2, 0, Math.PI * 0.32, Math.PI * 0.68); x.stroke();
       // brow
       x.strokeStyle = hex(new THREE.Color(def.hair).multiplyScalar(0.55)); x.lineWidth = 5;
-      x.beginPath(); x.ellipse(cx, cy - 46, 28, 10, 0, Math.PI * 1.15, Math.PI * 1.85); x.stroke();
+      x.beginPath(); x.ellipse(cx, cy - 58, 26, 9, 0, Math.PI * 1.15, Math.PI * 1.85); x.stroke();
     }
     // blush
     x.fillStyle = 'rgba(255,110,140,0.4)';
-    for (const s of [-1, 1]) { ellipse(x, 256 + s * 150, 196, 32, 13); x.fill(); }
+    for (const s of [-1, 1]) { ellipse(x, 256 + s * 158, 214, 30, 12); x.fill(); }
     if (def.mark === 'heart') {
       x.fillStyle = '#e8304a';
-      const hx = 256 + 148, hy = 192;
+      const hx = 256 + 156, hy = 210;
       x.beginPath(); x.moveTo(hx, hy + 12);
       x.bezierCurveTo(hx - 16, hy, hx - 10, hy - 12, hx, hy - 4);
       x.bezierCurveTo(hx + 10, hy - 12, hx + 16, hy, hx, hy + 12); x.fill();
     }
     // tiny mouth
+    x.fillStyle = 'rgba(200,120,120,0.45)'; ellipse(x, 256, 206, 3, 2); x.fill();   // a hint of a nose
     x.strokeStyle = '#8a2a3a'; x.lineWidth = 4; x.lineCap = 'round';
-    x.beginPath(); x.arc(256, 222, 9, Math.PI * 0.15, Math.PI * 0.85); x.stroke();
+    x.beginPath(); x.arc(256, 228, 7, Math.PI * 0.15, Math.PI * 0.85); x.stroke();
     const t = new THREE.CanvasTexture(c);
     t.anisotropy = 4;
     return t;
@@ -130,7 +134,7 @@
   const HEAD_R = 0.9;
   function buildHead(def) {
     const head = new THREE.Group();
-    const skinM = toon(def.skin), hairM = toon(def.hair);
+    const skinM = soft(def.skin, 0.75), hairM = soft(def.hair, 0.32);
     mesh(sphere(HEAD_R, 32, 24), skinM, 0, 0, 0, head);
     const sway = head.userData.sway = [];   // hair groups that swing with turns and wind
     const swing = (g, side, w) => { g.name = 'Hair' + (side < 0 ? 'R' : side > 0 ? 'L' : 'Back') + sway.length; sway.push({ g, side, w, z: g.rotation.z, x: g.rotation.x }); };
@@ -142,27 +146,42 @@
     for (const s of [-1, 1]) { const e = mesh(sphere(1, 12, 10), skinM, s * 0.88, -0.05, 0.02, head); e.scale.set(0.1, 0.17, 0.12); }
 
     // hair: cap tilted back so the big eyes stay clear, plus a rounded back volume
-    const cap = mesh(new THREE.SphereGeometry(HEAD_R + 0.08, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.62), hairM, 0, 0.03, -0.03, head);
-    cap.rotation.x = -0.68;
-    const backVol = mesh(sphere(1, 24, 16), hairM, 0, -0.08, -0.22, head);
-    backVol.scale.set(0.97, 0.92, 0.84);
-    // chunky bangs: teardrop strands across the forehead, shorter in the middle
-    for (let i = -3; i <= 3; i++) {
-      const a = i * 0.27, e = 0.62;
-      const dir = new V3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
-      const b = mesh(strandGeo(), hairM, dir.x * 0.93, dir.y * 0.93 - 0.08, dir.z * 0.93, head);
-      b.scale.set(0.24, 0.3 + Math.abs(i) * 0.035, 0.15);
-      b.rotation.order = 'YXZ';
-      b.rotation.set(-0.35, a, -i * 0.06); // tip leans forward over the forehead
+    // big puffy hair: a cap over the top, a rounded back volume and side puffs, all a little larger than the skull
+    const cap = mesh(new THREE.SphereGeometry(HEAD_R + 0.1, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.62), hairM, 0, 0.04, -0.03, head);
+    cap.rotation.x = -0.5;
+    const backVol = mesh(sphere(1, 28, 18), hairM, 0, -0.06, -0.2, head);
+    backVol.scale.set(1.04, 0.98, 0.9);
+    for (const s of [-1, 1]) { const p = mesh(sphere(1, 18, 14), hairM, s * 0.78, 0.0, -0.12, head); p.scale.set(0.34, 0.62, 0.62); }
+    // layered bangs: two rows of pointed locks across the forehead, ending just over the brows
+    for (const [row, n, e, len, w] of [[0, 4, 0.42, 0.3, 0.27], [1, 3, 0.56, 0.28, 0.3]]) {
+      for (let i = -n; i <= n; i++) {
+        const a = (i + row * 0.5) * (row ? 0.31 : 0.25), r = 1.0 - row * 0.03;
+        const dir = new V3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
+        const b = mesh(strandGeo(), hairM, dir.x * r, dir.y * r, dir.z * r, head);
+        b.scale.set(w, len + Math.abs(i) * 0.03 - (i === 0 ? 0.03 : 0), 0.15);
+        b.rotation.order = 'YXZ';
+        b.rotation.set(-e - 0.1, a, -(i + row * 0.5) * 0.1); // lies along the forehead, tips fanning out over the brows
+      }
     }
-    // side locks framing the face
+    // layered locks around the back of the head, ending at the nape (spiky hair has its own spikes)
+    if (def.style !== 'spiky') {
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI * (0.55 + i * 0.1125), e = -0.05;   // from one side, round the back, to the other
+        const dir = new V3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
+        const b = mesh(strandGeo(), hairM, dir.x * 0.98, dir.y - 0.12, dir.z * 0.98 - 0.16, head);
+        b.scale.set(0.34, 0.5 + (i % 2) * 0.08, 0.2);
+        b.rotation.order = 'YXZ';
+        b.rotation.set(0.18, a, 0);   // tips flick slightly outward
+      }
+    }
+    // long side locks framing the face, down past the chin
     for (const s of [-1, 1]) {
-      const l = mesh(strandGeo(), hairM, s * 0.8, -0.22, 0.32, head);
-      l.scale.set(0.24, 0.5, 0.2);
-      l.rotation.set(0.15, 0, s * 0.08);
+      const l = mesh(strandGeo(), hairM, s * 0.8, -0.28, 0.34, head);
+      l.scale.set(0.26, 0.68, 0.2);
+      l.rotation.set(0.18, 0, s * 0.06);
     }
 
-    const tipM = toon(def.hairTip || def.hair);
+    const tipM = soft(def.hairTip || def.hair, 0.32);
     switch (def.style) {
       case 'spiky':
         [[0, 1, -0.2], [0.5, 0.8, -0.3], [-0.5, 0.8, -0.3], [0.3, 0.6, -0.8], [-0.3, 0.6, -0.8], [0, 0.2, -1], [0.75, 0.4, -0.5], [-0.75, 0.4, -0.5], [0.2, 0.9, 0.3], [-0.25, 0.85, 0.25]]
@@ -234,9 +253,20 @@
     return head;
   }
 
-  // ---------- body: short and round, stubby limbs ----------
+  // ---------- body: slim chibi figure, about 2.5 heads tall ----------
   // Posable parts: legs (squash to crouch, pivot at the feet) and upper body (pivot at the hips)
-  const HIP_Y = 0.6;
+  const HIP_Y = 0.85;
+  // cone-ish frill with a wavy hem (skirts, tops)
+  function ruffle(rTop, rBottom, h, waves, amp) {
+    const g = new THREE.CylinderGeometry(rTop, rBottom, h, 64, 3, true), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), t = (h / 2 - y) / h;   // 0 at the top, 1 at the hem
+      const k = 1 + Math.sin(Math.atan2(z, x) * waves) * amp * t;
+      p.setXYZ(i, x * k, y, z * k);
+    }
+    g.computeVertexNormals();
+    return g;
+  }
   function buildRider(def) {
     // node names are the contract with Blender models (see docs/BLENDER.md)
     const rider = new THREE.Group(); rider.name = 'Rider';
@@ -248,28 +278,33 @@
     const body = new THREE.Group();   // children use rider-space heights
     body.position.y = -HIP_Y;
     upper.add(body);
-    const shirtM = toon(def.shirt), pantsM = toon(def.pants), skinM = toon(def.skin), shoeM = toon(def.shoes);
+    const shirtM = soft(def.shirt, 0.55, { side: THREE.DoubleSide }), pantsM = soft(def.pants, 0.55, { side: THREE.DoubleSide }),
+      skinM = soft(def.skin, 0.75), shoeM = soft(def.shoes, 0.4), accM = soft(def.accent, 0.45);
     for (const s of [-1, 1]) {
-      mesh(capsule(0.14, 0.22), skinM, s * 0.16, 0.32, 0, legs);
-      const shoe = mesh(sphere(1, 14, 10), shoeM, s * 0.16, 0.1, 0.05, legs); shoe.scale.set(0.18, 0.13, 0.26);
+      const leg = mesh(capsule(0.12, 0.46), skinM, s * 0.13, 0.46, 0, legs); leg.scale.set(1, 1, 0.95);
+      const thigh = mesh(sphere(0.135, 14, 10), skinM, s * 0.13, 0.64, 0, legs); thigh.scale.y = 1.25;
+      const shoe = mesh(sphere(1, 14, 10), shoeM, s * 0.13, 0.08, 0.04, legs); shoe.scale.set(0.13, 0.11, 0.2);
     }
-    if (def.skirt) {
-      mesh(new THREE.CylinderGeometry(0.27, 0.46, 0.34, 18), pantsM, 0, 0.62, 0, body);
+    if (def.skirt) {   // two-tier ruffled skirt
+      mesh(ruffle(0.25, 0.4, 0.2, 9, 0.12), pantsM, 0, 0.9, 0, body);
+      mesh(ruffle(0.33, 0.5, 0.18, 11, 0.14), pantsM, 0, 0.76, 0, body);
     } else {
-      for (const s of [-1, 1]) mesh(capsule(0.16, 0.1), pantsM, s * 0.15, 0.5, 0, legs);
-      mesh(capsule(0.29, 0.05), pantsM, 0, 0.66, 0, body);
+      for (const s of [-1, 1]) mesh(capsule(0.155, 0.16), pantsM, s * 0.13, 0.72, 0, legs);   // shorts legs cover the thighs
+      mesh(capsule(0.25, 0.04), pantsM, 0, 0.88, 0, body);
+      mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 18), accM, 0, 0.97, 0, body);   // belt
     }
-    const torso = mesh(capsule(0.3, 0.3), shirtM, 0, 0.98, 0, body);
-    torso.scale.set(1, 1, 0.88);
-    // collar / belt accent
-    mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 16), toon(def.accent), 0, 1.3, 0, body).rotation.x = Math.PI / 2;
-    if (!def.skirt) mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.07, 16), toon(def.accent), 0, 0.78, 0, body);
+    const torso = mesh(capsule(0.25, 0.2), shirtM, 0, 1.16, 0, body);
+    torso.scale.set(1, 1, 0.82);
+    if (def.skirt) mesh(ruffle(0.24, 0.33, 0.14, 10, 0.12), shirtM, 0, 1.22, 0, body);   // frilled top
+    mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.16, 10), skinM, 0, 1.5, 0, body);   // neck
+    mesh(new THREE.TorusGeometry(0.13, 0.04, 8, 16), accM, 0, 1.42, 0, body).rotation.x = Math.PI / 2;   // collar
     // arms out for balance
     const arms = [];
     for (const s of [-1, 1]) {
-      const sh = new THREE.Group(); sh.name = s < 0 ? 'ArmR' : 'ArmL'; sh.position.set(s * 0.3, 1.18, 0); sh.rotation.z = s * 1.05; body.add(sh);
-      mesh(capsule(0.1, 0.28), shirtM, 0, -0.2, 0, sh);
-      mesh(sphere(0.13), skinM, 0, -0.48, 0, sh);
+      const sh = new THREE.Group(); sh.name = s < 0 ? 'ArmR' : 'ArmL'; sh.position.set(s * 0.27, 1.36, 0); sh.rotation.z = s * 1.05; body.add(sh);
+      mesh(capsule(0.09, 0.14), shirtM, 0, -0.1, 0, sh);   // sleeve
+      mesh(capsule(0.07, 0.2), skinM, 0, -0.3, 0, sh);
+      const hand = mesh(sphere(0.09, 12, 10), skinM, 0, -0.48, 0, sh); hand.scale.set(1, 1.15, 0.85);
       arms.push(sh);
     }
     if (def.wings) {
@@ -278,14 +313,14 @@
       shape.lineTo(0.45, -0.15); shape.lineTo(0.25, 0.0); shape.lineTo(0.1, -0.25); shape.lineTo(0, 0);
       const wm = toon(0x2a1f3a, { side: THREE.DoubleSide });
       for (const s of [-1, 1]) {
-        const w = mesh(new THREE.ShapeGeometry(shape), wm, s * 0.15, 1.12, -0.28, body);
-        w.scale.x = s; w.rotation.y = s * 0.5;
+        const w = mesh(new THREE.ShapeGeometry(shape), wm, s * 0.12, 1.3, -0.2, body);
+        w.scale.set(s * 0.85, 0.85, 0.85); w.rotation.y = s * 0.5;
       }
     }
     const head = buildHead(def);
     head.name = 'Head';
-    head.position.y = 2.05;
-    head.scale.set(1.04, 0.97, 1);
+    head.position.y = 2.16;
+    head.scale.set(0.8, 0.76, 0.77);   // head-space is built at radius 0.9; this makes it ~0.7
     body.add(head);
     return { rider, legs, upper, head, arms };
   }
@@ -453,7 +488,7 @@
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8888aa, 0.9));
     const dl = new THREE.DirectionalLight(0xffffff, 0.7); dl.position.set(2, 4, 5); scene.add(dl);
     const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-    cam.position.set(0.4, 3.5, 5.6); cam.lookAt(0, 2.55, 0);
+    cam.position.set(0.4, 3.45, 4.6); cam.lookAt(0, 2.68, 0);
     const out = {};
     for (const def of PB.CHARACTERS) {
       const m = PB.buildRacerModel(def);
