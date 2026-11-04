@@ -179,6 +179,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #070614; c
 .ult-bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; }
 .ult-bar i { display: block; height: 100%; width: 0; }
 .boost-panel.ult-ready .ult-row span { color: var(--gold); text-shadow: 0 0 8px var(--gold); }
+/* ultimate meter flashes when taking a hit charges it */
+.ult-row.charged .ult-bar { animation: ultCharged .6s ease-out; }
+@keyframes ultCharged { 0% { box-shadow: 0 0 0 0 rgba(255,210,58,.9); filter: brightness(2); } 100% { box-shadow: 0 0 0 6px rgba(255,210,58,0); filter: none; } }
 .boost-panel.lv4 { border-color: var(--gold); box-shadow: 0 0 26px rgba(255,210,58,0.8); }
 .t-boost.ult { box-shadow: 0 0 26px #fff, 0 0 12px rgba(255,210,58,0.9); }
 .char-ult { font-size: 13px; color: var(--cyan); margin: -4px 0 6px; }

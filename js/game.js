@@ -32,6 +32,8 @@
   const GAUGE_REGEN = 7;                         // gauge % per second
   const BOOST_MIN = 20;                          // gauge % needed for a short Lv.1-only boost
   const GRAVITY = 34;
+  const BOUNCE_T = 0.6;
+  const SHIELD_CHARGE = 4;   // ultimate charge for a hit the shield blocked (a real hit gives 6-15)   // seconds a hit pops the racer up into the air (visual only)
   const START_EARLY = 0.12, START_LATE = 0.25;   // perfect-start window around GO, in seconds before / after
   const DIFFICULTY = [{ skill: [0.78, 0.86], rubber: 0.06, item: 0.6 }, { skill: [0.86, 0.94], rubber: 0.09, item: 1 }, { skill: [0.93, 1.0], rubber: 0.12, item: 1.4 }];
 
@@ -801,6 +803,7 @@
       this.turbo = 0; this.spin = 0; this.shield = 0; this.shock = 0;
       this.drifting = false; this.driftDir = 0; this.driftTime = 0;
       this.steerVis = 0; this.hop = 0; this.bob = Math.random() * 10; this.wallCd = 0;
+      this.bounceT = 0; this.bounceH = 0; this.pSpin = 0; this.pShock = 0; this.pBurn = 0;
       this.wrongTime = 0;
       // jumping / falling
       this.air = false; this.vy = 0; this.airTime = 0; this.onRamp = null;
@@ -910,8 +913,8 @@
     // Flame Road: slower top speed for a second; a shield soaks it, a veiled racer passes through
     applyBurn() {
       if (!this.auth || this.burn > 0 || unstoppable(this) || this.respawnT > 0) return;
-      if (this.shield > 0) { this.shield = 0; spawnBurst(this.pos.clone().add(new V3(0, 1.6, 0)), 0x44ccff, 3.5); return; }
-      this.burn = 1.0; this.speed *= 0.85;
+      if (this.shield > 0) { this.shield = 0; spawnBurst(this.pos.clone().add(new V3(0, 1.6, 0)), 0x44ccff, 3.5); this.hurtCharge(SHIELD_CHARGE); return; }
+      this.burn = 1.0; this.speed *= 0.85; this.hurtCharge(8);
       if (this.isPlayer) { audio.sfx('hit'); bigMsg('ไฟลวก!', true); }
     }
 
@@ -926,12 +929,18 @@
     knock(from, strength) {
       if (!this.auth || this.knockT > 0 || unstoppable(this) || this.respawnT > 0 || this.falling) return;
       this.knockT = 0.8;
-      if (this.shield > 0) { this.shield = 0; spawnBurst(this.pos.clone().add(new V3(0, 1.6, 0)), 0x44ccff, 3.5); return; }
+      if (this.shield > 0) { this.shield = 0; spawnBurst(this.pos.clone().add(new V3(0, 1.6, 0)), 0x44ccff, 3.5); this.hurtCharge(SHIELD_CHARGE); return; }
       const dx = this.pos.x - from.pos.x, dz = this.pos.z - from.pos.z, d = Math.hypot(dx, dz) || 1;
       this.pos.x += dx / d * strength; this.pos.z += dz / d * strength;
       this.speed *= strength > 3 ? 0.5 : 0.8;
-      this.hop = 0.35;
+      this.hop = 0.35; this.hurtCharge(strength > 3 ? 10 : 6);
       if (this.isPlayer) { audio.sfx('bump'); race.shake = Math.max(race.shake, 0.4); }
+    }
+
+    // taking damage builds the ultimate meter (on top of the usual catch-up boost for racers further back)
+    hurtCharge(amount) {
+      this.chargeUlt(amount);
+      if (this.isPlayer) { const row = document.getElementById('ult-row'); row.classList.remove('charged'); void row.offsetWidth; row.classList.add('charged'); }
     }
 
     takeHit(kind) {
@@ -942,10 +951,11 @@
         this.shield = 0;
         spawnBurst(this.pos.clone().add(new V3(0, 1.6, 0)), 0x44ccff, 3.5);
         if (this.isPlayer) audio.sfx('shield');
+        this.hurtCharge(SHIELD_CHARGE);   // blocked, but still a little charge
         return;
       }
-      if (kind === 'shock') { this.shock = 2.5; this.speed *= 0.55; }
-      else { this.spin = 1.4; this.speed *= 0.25; }
+      if (kind === 'shock') { this.shock = 2.5; this.speed *= 0.55; this.hurtCharge(12); }
+      else { this.spin = 1.4; this.speed *= 0.25; this.hurtCharge(15); }
       if (this.stage > 0) { this.stage = 0; if (this.boostMax === 3) this.gauge = 30; }   // a full boost keeps a little charge
       this.drifting = false; this.turbo = 0;
       if (this.isPlayer) { audio.sfx('hit'); race.shake = 0.6; bigMsg(kind === 'shock' ? 'โดนช็อก!' : 'โดนโจมตี!', true); }
@@ -1280,7 +1290,13 @@
       this.bob += dt * 3;
       this.hop = Math.max(0, this.hop - dt * 1.4);
       const hopY = Math.sin((0.35 - this.hop) / 0.35 * Math.PI) * (this.hop > 0 ? 0.9 : 0);
-      m.root.position.set(this.pos.x, this.pos.y + 0.35 + Math.sin(this.bob) * 0.12 + hopY, this.pos.z);
+      // hit bounce: popped up into the air when hit. Read from the hit state (spin/shock are synced), so remote racers bounce too.
+      const pop = this.spin > this.pSpin + 0.3 ? 2.4 : this.shock > this.pShock + 0.3 ? 1.6 : this.burn > this.pBurn + 0.3 ? 1.1 : 0;
+      this.pSpin = this.spin; this.pShock = this.shock; this.pBurn = this.burn;
+      if (pop) { this.bounceT = BOUNCE_T; this.bounceH = pop; }
+      if (this.bounceT > 0) { this.bounceT = Math.max(0, this.bounceT - dt); if (this.bounceT === 0) this.land = 0.25; }   // squash on touchdown
+      const bounceY = this.bounceT > 0 ? Math.sin((1 - this.bounceT / BOUNCE_T) * Math.PI) * this.bounceH : 0;
+      m.root.position.set(this.pos.x, this.pos.y + 0.35 + Math.sin(this.bob) * 0.12 + hopY + bounceY, this.pos.z);
       // nose follows the road, or the flight arc while airborne
       const pitch = this.air ? -clamp(this.vy * 0.025, -0.4, 0.4) : -Math.asin(clamp(s.t.y, -0.9, 0.9));
       m.root.rotation.set(pitch - Math.min(this.speed, 140) * 0.0006 - this.stage * 0.02, this.heading, 0);
@@ -1305,7 +1321,7 @@
       const flail = this.spin > 0 || this.falling;
       PB.animateRider(m, { dt, steer: flail ? Math.sin(race.time * 18) : this.steerVis,
         drift: this.drifting ? this.driftDir : 0, stage: this.stage, speed: this.speed, time: race.time,
-        air: this.air || this.falling ? 1 : 0 });
+        air: this.air || this.falling || this.bounceT > 0 ? 1 : 0 });
       m.shield.visible = this.shield > 0;
       m.shield.material.color.setHex(this.stage === 4 && this.def.ult === 'radiant' ? 0xffd23a : 0x44ccff);
       if (m.shield.visible) m.shield.material.opacity = 0.2 + Math.sin(race.time * 10) * 0.06;
