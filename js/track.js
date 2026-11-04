@@ -560,8 +560,38 @@
       }
       return null;
     };
+    // does any part of obj poke onto the road or its walls? (vertex test against a spatial hash of the samples)
+    const CELL = 40, CLEAR = W + 3.4, cells = new Map(), vtx = new V3();
+    samples.forEach(sm => { const k = Math.floor(sm.p.x / CELL) + ',' + Math.floor(sm.p.z / CELL); (cells.get(k) || cells.set(k, []).get(k)).push(sm); });
+    const intrudes = obj => {
+      obj.updateMatrixWorld(true);
+      let hit = false;
+      obj.traverse(m => {
+        if (hit || !m.isMesh) return;
+        const pa = m.geometry.attributes.position, step = Math.max(1, Math.floor(pa.count / 60));
+        for (let j = 0; j < pa.count && !hit; j += step) {
+          vtx.fromBufferAttribute(pa, j).applyMatrix4(m.matrixWorld);
+          const cx = Math.floor(vtx.x / CELL), cz = Math.floor(vtx.z / CELL);
+          for (let a = -1; a <= 1 && !hit; a++) for (let b = -1; b <= 1 && !hit; b++) {
+            for (const sm of cells.get((cx + a) + ',' + (cz + b)) || []) {
+              const dx = vtx.x - sm.p.x, dz = vtx.z - sm.p.z;
+              if (dx * dx + dz * dz < CLEAR * CLEAR && vtx.y > sm.p.y - 0.3 && vtx.y < sm.p.y + 12) { hit = true; break; }
+            }
+          }
+        }
+      });
+      return hit;
+    };
+    const before = group.children.length;
     buildScenery[def.theme](group, samples, N, W, spot, th, nearTrack);
-    buildStructures(group, { samples, N, W, th, theme: def.theme, name: def.name, nearTrack, blocked, ramps });
+    // scenery scattered beside the road (rocks, trees, crystals, clouds...) that ended up on it is dropped
+    for (const o of group.children.slice(before)) {
+      if (o.userData.overRoad || o.isPoints) continue;
+      const r = o.geometry && o.geometry.boundingSphere ? o.geometry.boundingSphere.radius : (o.geometry && (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere.radius)) || 0;
+      if (r * Math.max(o.scale.x, o.scale.z) > 150) continue;   // ground, sea, backdrop mountains
+      if (intrudes(o)) group.remove(o);
+    }
+    buildStructures(group, { samples, N, W, th, theme: def.theme, name: def.name, nearTrack, blocked, ramps, intrudes });
     group.traverse(o => { if (o.material && o.material.uniforms && o.material.uniforms.fogColor) PB.fx.syncFog(o.material, scene.fog); });
     // thousands of static pieces -> a few hundred draw calls, chunked so off-screen parts are still culled
     const merge = PB.optimize.mergeStatic(group, 220);
@@ -632,7 +662,7 @@
 
   // ---------- trackside structures: gantries over the road, billboards, and themed buildings close to the walls ----------
   function buildStructures(group, c) {
-    const { samples, N, W, th, nearTrack, blocked, ramps } = c;
+    const { samples, N, W, th, nearTrack, blocked, ramps, intrudes } = c;
     const yaw = s => Math.atan2(s.flat.x, s.flat.z);
     const hex = v => '#' + new THREE.Color(v).getHexString();
     const glowCol = th.wall.light, trimCol = new THREE.Color(th.wall.trim).getHex();
@@ -699,6 +729,10 @@
         o.position.set(x, th.floating ? s.p.y - rand(1, 6) : th.ground === -3 ? -1.4 : th.ground, z);
         o.rotation.y = yaw(s) + (side > 0 ? -Math.PI / 2 : Math.PI / 2);   // local +Z faces the road
         kit(o, { s, side, darkMat, trimMat, lightMat, box, roadY: s.p.y });
+        // big pieces can reach over the wall: step the whole set back from the road, or leave it out
+        let tries = 0;
+        while (intrudes(o) && tries++ < 4) o.position.addScaledVector(s.n, side * 4);
+        if (tries > 4) continue;
         group.add(o);
       }
     }
@@ -923,7 +957,7 @@
       for (let i = 20, k = 0; i < N; i += Math.floor(N / 14), k++) {
         const s = samples[i];
         const ring = new THREE.Mesh(new THREE.TorusGeometry(W + 4, 0.45, 8, 40, Math.PI), ringMats[k % 2]);
-        ring.position.copy(s.p);
+        ring.position.copy(s.p); ring.userData.overRoad = true;
         ring.rotation.y = Math.atan2(s.flat.x, s.flat.z);
         group.add(ring);
       }
