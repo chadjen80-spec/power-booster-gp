@@ -66,23 +66,39 @@
     new THREE.Vector2(0, -1), new THREE.Vector2(0.28, -0.55), new THREE.Vector2(0.48, -0.1),
     new THREE.Vector2(0.52, 0.3), new THREE.Vector2(0.38, 0.7), new THREE.Vector2(0, 0.9)], 14);
 
-  // Unit sphere cut off along a curved hairline. Polar reach by direction: ~2.4 rad at the back (nape), ~1.7 over the ears, 1.0 at the front.
+  // Hair shell: a thick, rounded slab (outer surface, inner surface and a rim joining them) cut along a curved hairline.
+  // Polar reach by direction: ~2.4 rad at the back (nape), ~1.7 over the ears, 1.0 at the front, with a soft wave along
+  // the back and sides so the edge reads as locks rather than the rim of a bowl. Unit size; the mesh scale sets the radii.
   function hairShellGeo() {
-    const H = 28, g = new THREE.SphereGeometry(1, 48, H), p = g.attributes.position, uv = g.attributes.uv;
-    for (let i = 0; i < p.count; i++) {
-      // angles from the uv grid, not the position: the pole vertices all share one point and would get the wrong direction
-      const phi = uv.getX(i) * Math.PI * 2, theta = (1 - uv.getY(i)) * Math.PI;
-      const az = Math.atan2(-Math.cos(phi), -Math.sin(phi));   // 0 at the back, +-PI at the front
-      const c = Math.cos(Math.abs(az) / 2), reach = 1.0 + 1.42 * c * c;
-      // the last ring lands on the hairline too, so the pole's triangle fan collapses instead of making a zigzag edge
-      const t = Math.min(1, theta / (Math.PI * (H - 1) / H)) * reach;
-      p.setXYZ(i, Math.sin(t) * Math.sin(az), Math.cos(t), -Math.sin(t) * Math.cos(az));
+    const W = 72, H = 22, THICK = 0.1;
+    const pos = [], idx = [];
+    const dir = (t, az) => [Math.sin(t) * Math.sin(az), Math.cos(t), -Math.sin(t) * Math.cos(az)];
+    for (const inner of [false, true]) {          // outer then inner surface
+      for (let r = 0; r <= H; r++) for (let a = 0; a < W; a++) {
+        const az = -Math.PI + (a / W) * Math.PI * 2;   // 0 at the back, +-PI at the front
+        const c = Math.cos(Math.abs(az) / 2), back = c * c;
+        const k = inner ? 1 - THICK * (0.2 + 0.8 * back) : 1;   // thick at the back and sides, thin at the front so no brim shows over the fringe
+        const reach = 1.0 + 1.42 * back + 0.09 * Math.sin(az * 11) * back;
+        const t = (r / H) * reach * (k < 1 ? 0.985 : 1);   // inner edge tucks in a hair above the outer one
+        const d = dir(t, az);
+        pos.push(d[0] * k, d[1] * k, d[2] * k);
+      }
     }
-    // weld the uv seam so the shading has no visible line down the side
-    g.deleteAttribute('uv'); g.deleteAttribute('normal');
-    const welded = THREE.BufferGeometryUtils ? THREE.BufferGeometryUtils.mergeVertices(g, 1e-4) : g;
-    welded.computeVertexNormals();
-    return welded;
+    const O = 0, I = (H + 1) * W, v = (base, r, a) => base + r * W + ((a + W) % W);
+    for (let r = 0; r < H; r++) for (let a = 0; a < W; a++) {
+      idx.push(v(O, r, a), v(O, r + 1, a), v(O, r, a + 1), v(O, r, a + 1), v(O, r + 1, a), v(O, r + 1, a + 1));   // outer, facing out
+      idx.push(v(I, r, a), v(I, r, a + 1), v(I, r + 1, a), v(I, r, a + 1), v(I, r + 1, a + 1), v(I, r + 1, a));   // inner, facing in
+    }
+    for (let a = 0; a < W; a++) {   // rim along the hairline: this is what shows the hair's thickness
+      idx.push(v(O, H, a), v(I, H, a), v(O, H, a + 1), v(O, H, a + 1), v(I, H, a), v(I, H, a + 1));
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const n = g.attributes.normal;   // the crown is W copies of one point: give them the straight-up normal
+    for (let a = 0; a < W; a++) { n.setXYZ(a, 0, 1, 0); n.setXYZ(I + a, 0, -1, 0); }
+    return g;
   }
 
   // ---------- painted face (eyes, lashes, blush, mouth) on a sphere patch over the head ----------
@@ -207,15 +223,15 @@
     // big puffy hair: a cap over the top and a rounded back volume, a little larger than the skull
     // Hair: one shell hugging the skull. Its hairline curves: low at the nape, up over the ears, high at the front
     // (where the fringe takes over), so it follows the head down to the neck instead of ending in a helmet rim.
-    const shell = mesh(hairShellGeo(), hairM, 0, 0.05, -0.08, head);
-    shell.scale.set(HEAD_R + 0.13, HEAD_R + 0.1, HEAD_R + 0.16);   // stands off the skull: fuller hair, no flicker where it meets the skin
+    const shell = mesh(hairShellGeo(), hairM, 0, 0.05, -0.06, head);
+    shell.scale.set(HEAD_R + 0.12, HEAD_R + 0.1, HEAD_R + 0.15);   // close to the skull so the hair sits on the head, not over it
     // bangs: a smooth fringe shell over the forehead (edge at polar angle `edge`), plus locks along its edge.
     // Each racer has its own cut (def.bangs): see BANGS.
     hairM.side = THREE.DoubleSide;
-    const fringe = (phi0, phi1, edge) => mesh(new THREE.SphereGeometry(HEAD_R + 0.07, 36, 14, Math.PI / 2 + phi0, phi1 - phi0, 0, edge), hairM, 0, 0, 0, head);
+    const fringe = (phi0, phi1, edge) => mesh(new THREE.SphereGeometry(HEAD_R + 0.11, 36, 14, Math.PI / 2 + phi0, phi1 - phi0, 0, edge), hairM, 0, 0, 0, head);
     const lock = (a, len, w, tilt, e) => {   // a: angle round the face (+ = character's left), tilt: lean of the tip
       e = e == null ? 0.42 : e;
-      const r = HEAD_R + 0.07, dir = new V3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
+      const r = HEAD_R + 0.11, dir = new V3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
       const b = mesh(strandGeo(), hairM, dir.x * r, dir.y * r, dir.z * r, head);
       b.scale.set(w, len, 0.14);
       b.rotation.order = 'YXZ';
@@ -224,11 +240,11 @@
     const cut = BANGS[def.bangs] || BANGS.soft;
     cut.shell.forEach(([p0, p1, edge]) => fringe(p0, p1, edge));
     cut.locks.forEach(l => lock(...l));
-    // long side locks framing the face, down past the chin
+    // long side locks framing the face, down past the chin; they start up inside the hair so they read as part of it
     for (const s of [-1, 1]) {
-      const l = mesh(strandGeo(), hairM, s * 0.8, -0.28, 0.34, head);
-      l.scale.set(0.26, 0.68, 0.2);
-      l.rotation.set(0.18, 0, s * 0.06);
+      const l = mesh(strandGeo(), hairM, s * 0.86, -0.12, 0.3, head);
+      l.scale.set(0.3, 0.82, 0.28);
+      l.rotation.set(0.16, s * 0.3, s * 0.05);
     }
 
     const tipM = soft(def.hairTip || def.hair, 0.32);
@@ -237,7 +253,7 @@
         [[0, 1, -0.2], [0.5, 0.8, -0.3], [-0.5, 0.8, -0.3], [0.3, 0.6, -0.8], [-0.3, 0.6, -0.8], [0, 0.2, -1], [0.75, 0.4, -0.5], [-0.75, 0.4, -0.5], [0.2, 0.9, 0.3], [-0.25, 0.85, 0.25]]
           .forEach(d => {
             const dir = new V3(...d).normalize();
-            const c = mesh(new THREE.ConeGeometry(0.27, 0.8, 10), hairM, dir.x * 0.92, dir.y * 0.92, dir.z * 0.92, head);
+            const c = mesh(new THREE.ConeGeometry(0.27, 0.8, 10), hairM, dir.x * 1.02, dir.y * 1.02 + 0.04, dir.z * 1.02 - 0.04, head);   // just out of the hair shell
             aim(c, dir);
           });
         break;
@@ -277,26 +293,26 @@
 
     if (def.acc === 'catears') {
       for (const s of [-1, 1]) {
-        const e = mesh(new THREE.ConeGeometry(0.26, 0.55, 4), toon(def.shirt), s * 0.52, 0.86, -0.1, head);
+        const e = mesh(new THREE.ConeGeometry(0.26, 0.55, 4), toon(def.shirt), s * 0.56, 0.95, -0.1, head);
         e.rotation.set(-0.1, Math.PI / 4, -s * 0.45);
-        const inner = mesh(new THREE.ConeGeometry(0.14, 0.34, 4), basic(0x22ffd2), s * 0.51, 0.84, 0.0, head, false);
+        const inner = mesh(new THREE.ConeGeometry(0.14, 0.34, 4), basic(0x22ffd2), s * 0.55, 0.93, 0.0, head, false);
         inner.rotation.copy(e.rotation);
       }
     } else if (def.acc === 'horns') {
       for (const s of [-1, 1]) {
-        const h = mesh(new THREE.ConeGeometry(0.14, 0.7, 10), toon(0x6a4a2a), s * 0.55, 0.88, 0.05, head);
+        const h = mesh(new THREE.ConeGeometry(0.14, 0.7, 10), toon(0x6a4a2a), s * 0.58, 0.95, 0.05, head);
         h.rotation.set(-0.35, 0, -s * 0.55);
       }
     } else if (def.acc === 'ahoge') {
-      const a = mesh(new THREE.TorusGeometry(0.24, 0.055, 6, 14, Math.PI * 1.2), hairM, 0.05, 1.1, 0, head);
+      const a = mesh(new THREE.TorusGeometry(0.24, 0.055, 6, 14, Math.PI * 1.2), hairM, 0.05, 1.2, 0, head);
       a.rotation.set(0, Math.PI / 2, 0.4);
     } else if (def.acc === 'headphones') {
-      const band = mesh(new THREE.TorusGeometry(1.02, 0.07, 8, 32, Math.PI), toon(0xf2f4f8), 0, 0.02, -0.05, head);
+      const band = mesh(new THREE.TorusGeometry(1.08, 0.07, 8, 32, Math.PI), toon(0xf2f4f8), 0, 0.05, -0.06, head);
       band.rotation.x = -0.15;
       for (const s of [-1, 1]) {
-        const cup = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 20), toon(0xf2f4f8), s * 0.98, 0, -0.04, head);
+        const cup = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 20), toon(0xf2f4f8), s * 1.06, 0.02, -0.06, head);
         cup.rotation.z = Math.PI / 2;
-        const pad = mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.06, 20), toon(0x2a3a6a), s * 1.1, 0, -0.04, head);
+        const pad = mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.06, 20), toon(0x2a3a6a), s * 1.18, 0.02, -0.06, head);
         pad.rotation.z = Math.PI / 2;
       }
     }
