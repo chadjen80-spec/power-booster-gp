@@ -5,28 +5,28 @@
 
   // lashes: winged upper lashes (girls); mark: cheek sticker
   PB.CHARACTERS = [
-    { id: 'nova', ult: 'thruster', name: 'Nova', title: 'ไอดอลไซเบอร์', skin: 0xffeee6, hair: 0x9cd2ff, hairTip: 0xd8b8ff, eyes: 0x8a4dff, lashes: true,
+    { id: 'nova', bangs: 'blunt', ult: 'thruster', name: 'Nova', title: 'ไอดอลไซเบอร์', skin: 0xffeee6, hair: 0x9cd2ff, hairTip: 0xd8b8ff, eyes: 0x8a4dff, lashes: true,
       style: 'twintails', acc: 'catears', shirt: 0xe0207a, pants: 0x2a1730, shoes: 0xe6ecf5, accent: 0x22ffd2,
       board: 0x1b2730, boardAccent: 0x22ffcc, flame: 0x66ffee, stats: { speed: 4, accel: 3, handling: 4 } },
-    { id: 'blaze', ult: 'flame', name: 'Blaze', title: 'นักซิ่งเปลวไฟ', skin: 0xffeadc, hair: 0xff6a1a, eyes: 0x2f7dff,
+    { id: 'blaze', bangs: 'spiky', ult: 'flame', name: 'Blaze', title: 'นักซิ่งเปลวไฟ', skin: 0xffeadc, hair: 0xff6a1a, eyes: 0x2f7dff,
       style: 'spiky', acc: 'none', shirt: 0xffffff, pants: 0x2b3f8c, shoes: 0x222222, accent: 0xe02020,
       board: 0xd23a2a, boardAccent: 0xffd23a, flame: 0xff9a2a, stats: { speed: 5, accel: 3, handling: 2 } },
-    { id: 'frost', ult: 'ice', name: 'Frost', title: 'อัศวินน้ำแข็ง', skin: 0xfff0e6, hair: 0xe8eef5, eyes: 0x3aa0ff,
+    { id: 'frost', bangs: 'parted', ult: 'ice', name: 'Frost', title: 'อัศวินน้ำแข็ง', skin: 0xfff0e6, hair: 0xe8eef5, eyes: 0x3aa0ff,
       style: 'short', acc: 'none', shirt: 0xfff2a8, pants: 0xf5f5f5, shoes: 0x3aa0ff, accent: 0xffd23a,
       board: 0xbfe8ff, boardAccent: 0x3aa0ff, flame: 0x9ad8ff, stats: { speed: 3, accel: 4, handling: 4 } },
-    { id: 'leaf', ult: 'glide', name: 'Leaf', title: 'ภูตแห่งป่า', skin: 0xffeee2, hair: 0x8fd14f, eyes: 0x3fbf5a, lashes: true,
+    { id: 'leaf', bangs: 'side', ult: 'glide', name: 'Leaf', title: 'ภูตแห่งป่า', skin: 0xffeee2, hair: 0x8fd14f, eyes: 0x3fbf5a, lashes: true,
       style: 'long', acc: 'none', skirt: true, shirt: 0xf2e3b0, pants: 0x5c7a3a, shoes: 0x8a6a3a, accent: 0xd6ff5a,
       board: 0x2f8f4f, boardAccent: 0xd6ff5a, flame: 0xb8ff6a, stats: { speed: 3, accel: 5, handling: 3 } },
-    { id: 'ruby', ult: 'lightning', name: 'Ruby', title: 'จอมเวทแดง', skin: 0xffeadc, hair: 0xd92a2a, eyes: 0x2aa04a, lashes: true,
+    { id: 'ruby', bangs: 'soft', ult: 'lightning', name: 'Ruby', title: 'จอมเวทแดง', skin: 0xffeadc, hair: 0xd92a2a, eyes: 0x2aa04a, lashes: true,
       style: 'ponytail', acc: 'none', skirt: true, shirt: 0xa01818, pants: 0x5a1010, shoes: 0x3a1a10, accent: 0xffc04a,
       board: 0x8a1a2a, boardAccent: 0xffc04a, flame: 0xff5a3a, stats: { speed: 4, accel: 4, handling: 3 } },
-    { id: 'dusk', ult: 'veil', name: 'Dusk', title: 'ปีศาจรัตติกาล', skin: 0xb07a55, hair: 0x1a1a24, eyes: 0xffb020,
+    { id: 'dusk', bangs: 'swept', ult: 'veil', name: 'Dusk', title: 'ปีศาจรัตติกาล', skin: 0xb07a55, hair: 0x1a1a24, eyes: 0xffb020,
       style: 'spiky', acc: 'horns', wings: true, shirt: 0x1c1f3a, pants: 0x111322, shoes: 0x2a2a3a, accent: 0x4a9aff,
       board: 0x14141c, boardAccent: 0x4a9aff, flame: 0x6a8aff, stats: { speed: 5, accel: 2, handling: 3 } },
-    { id: 'sky', ult: 'storm', name: 'Sky', title: 'ดีเจสายลม', skin: 0xfff4f0, hair: 0x6fe0f2, eyes: 0x2a7aff, lashes: true, mark: 'heart',
+    { id: 'sky', bangs: 'wispy', ult: 'storm', name: 'Sky', title: 'ดีเจสายลม', skin: 0xfff4f0, hair: 0x6fe0f2, eyes: 0x2a7aff, lashes: true, mark: 'heart',
       style: 'lowtails', acc: 'headphones', skirt: true, shirt: 0xf26a8a, pants: 0xf26a8a, shoes: 0x2a4aaa, accent: 0xffffff,
       board: 0x2a4aaa, boardAccent: 0x6fe0f2, flame: 0x6affff, stats: { speed: 3, accel: 3, handling: 5 } },
-    { id: 'sunny', ult: 'radiant', name: 'Sunny', title: 'เด็กหนุ่มสดใส', skin: 0xffeadc, hair: 0xffd66a, eyes: 0x9a4aff,
+    { id: 'sunny', bangs: 'sweptL', ult: 'radiant', name: 'Sunny', title: 'เด็กหนุ่มสดใส', skin: 0xffeadc, hair: 0xffd66a, eyes: 0x9a4aff,
       style: 'short', acc: 'ahoge', shirt: 0xf0f0f0, pants: 0x6a4a2a, shoes: 0x3a2a1a, accent: 0x3a8aff,
       board: 0xffa83a, boardAccent: 0xffffff, flame: 0xffe06a, stats: { speed: 4, accel: 4, handling: 3 } },
   ];
@@ -132,6 +132,28 @@
 
   // ---------- head ----------
   const HEAD_R = 0.9;
+  // Fringe cuts. shell: [from, to, edge] = fringe pieces across the face (radians either side of front) and how low they reach;
+  // locks: [angle, length, width, tip tilt, elevation?]. Edge ~1.2 sits on the brows, ~1.28 is a heavy straight cut.
+  const BANGS = {
+    soft: { shell: [[-1.2, 1.2, 1.2]],   // a few broad rounded locks
+      locks: [[-0.95, 0.24, 0.44, 0.2], [-0.48, 0.27, 0.44, 0.08], [0, 0.22, 0.44, 0], [0.48, 0.27, 0.44, -0.08], [0.95, 0.24, 0.44, -0.2]] },
+    blunt: { shell: [[-1.25, 1.25, 1.27]],   // straight "hime" cut
+      locks: [[-1.05, 0.34, 0.36, 0.05], [1.05, 0.34, 0.36, -0.05]] },
+    parted: { shell: [[-1.2, -0.32, 0.98], [0.32, 1.2, 0.98]],   // centre parting: forehead shows, curtains swept out to the sides
+      locks: [[-0.42, 0.34, 0.4, 0.6, 0.5], [-0.85, 0.36, 0.42, 0.35, 0.45], [0.42, 0.34, 0.4, -0.6, 0.5], [0.85, 0.36, 0.42, -0.35, 0.45]] },
+    side: { shell: [[-1.2, -0.15, 0.92], [-0.15, 1.2, 1.26]],   // long fringe over the left eye, short on the right
+      locks: [[0.5, 0.44, 0.62, -0.4], [-0.15, 0.36, 0.5, -0.65, 0.5], [-0.6, 0.26, 0.4, -0.5, 0.55], [-1.0, 0.22, 0.36, -0.2]] },
+    swept: { shell: [[-1.2, 1.2, 0.95]],   // long locks combed hard toward the character's right
+      locks: [[-0.95, 0.3, 0.4, 0.75, 0.5], [-0.45, 0.38, 0.42, 0.7, 0.5], [0.05, 0.4, 0.42, 0.65, 0.5], [0.55, 0.36, 0.4, 0.6, 0.5], [1.0, 0.28, 0.36, 0.45, 0.5]] },
+    sweptL: { shell: [[-1.2, 1.2, 0.92]],   // short fluffy fringe flicked toward the character's left
+      locks: [[0.9, 0.22, 0.4, -0.7, 0.55], [0.4, 0.25, 0.42, -0.65, 0.58], [-0.1, 0.25, 0.42, -0.6, 0.58], [-0.6, 0.22, 0.4, -0.55, 0.58], [-1.0, 0.18, 0.36, -0.4, 0.55]] },
+    spiky: { shell: [[-1.2, 1.2, 0.95]],   // messy pointed locks of mixed length
+      locks: [[-1.0, 0.3, 0.22, 0.35, 0.5], [-0.7, 0.4, 0.22, 0.15, 0.5], [-0.38, 0.3, 0.22, 0.3, 0.5], [-0.08, 0.42, 0.22, -0.05, 0.5],
+        [0.22, 0.3, 0.22, -0.25, 0.5], [0.52, 0.4, 0.22, -0.1, 0.5], [0.82, 0.28, 0.22, -0.35, 0.5], [1.05, 0.32, 0.22, -0.15, 0.5]] },
+    wispy: { shell: [[-1.2, 1.2, 1.16]],   // fine see-through strands
+      locks: [[-0.9, 0.24, 0.18, 0.1], [-0.6, 0.28, 0.18, 0.05], [-0.3, 0.26, 0.18, 0.08], [0, 0.3, 0.18, 0], [0.3, 0.26, 0.18, -0.08],
+        [0.6, 0.28, 0.18, -0.05], [0.9, 0.24, 0.18, -0.1]] },
+  };
   function buildHead(def) {
     const head = new THREE.Group();
     const skinM = soft(def.skin, 0.75), hairM = soft(def.hair, 0.32);
@@ -148,32 +170,25 @@
     // hair: cap tilted back so the big eyes stay clear, plus a rounded back volume
     // big puffy hair: a cap over the top, a rounded back volume and side puffs, all a little larger than the skull
     const cap = mesh(new THREE.SphereGeometry(HEAD_R + 0.1, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.62), hairM, 0, 0.04, -0.03, head);
-    cap.rotation.x = -0.5;
+    cap.rotation.x = -1.0;   // tilted well back: the fringe (BANGS), not the cap, sets each racer's hairline
     const backVol = mesh(sphere(1, 28, 18), hairM, 0, -0.06, -0.2, head);
     backVol.scale.set(1.04, 0.98, 0.9);
     for (const s of [-1, 1]) { const p = mesh(sphere(1, 18, 14), hairM, s * 0.78, 0.0, -0.12, head); p.scale.set(0.34, 0.62, 0.62); }
-    // layered bangs: two rows of pointed locks across the forehead, ending just over the brows
-    for (const [row, n, e, len, w] of [[0, 4, 0.42, 0.3, 0.27], [1, 3, 0.56, 0.28, 0.3]]) {
-      for (let i = -n; i <= n; i++) {
-        const a = (i + row * 0.5) * (row ? 0.31 : 0.25), r = 1.0 - row * 0.03;
-        const dir = new V3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
-        const b = mesh(strandGeo(), hairM, dir.x * r, dir.y * r, dir.z * r, head);
-        b.scale.set(w, len + Math.abs(i) * 0.03 - (i === 0 ? 0.03 : 0), 0.15);
-        b.rotation.order = 'YXZ';
-        b.rotation.set(-e - 0.1, a, -(i + row * 0.5) * 0.1); // lies along the forehead, tips fanning out over the brows
-      }
-    }
-    // layered locks around the back of the head, ending at the nape (spiky hair has its own spikes)
-    if (def.style !== 'spiky') {
-      for (let i = 0; i < 9; i++) {
-        const a = Math.PI * (0.55 + i * 0.1125), e = -0.05;   // from one side, round the back, to the other
-        const dir = new V3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
-        const b = mesh(strandGeo(), hairM, dir.x * 0.98, dir.y - 0.12, dir.z * 0.98 - 0.16, head);
-        b.scale.set(0.34, 0.5 + (i % 2) * 0.08, 0.2);
-        b.rotation.order = 'YXZ';
-        b.rotation.set(0.18, a, 0);   // tips flick slightly outward
-      }
-    }
+    // bangs: a smooth fringe shell over the forehead (edge at polar angle `edge`), plus locks along its edge.
+    // Each racer has its own cut (def.bangs): see BANGS.
+    hairM.side = THREE.DoubleSide;
+    const fringe = (phi0, phi1, edge) => mesh(new THREE.SphereGeometry(HEAD_R + 0.07, 36, 14, Math.PI / 2 + phi0, phi1 - phi0, 0, edge), hairM, 0, 0, 0, head);
+    const lock = (a, len, w, tilt, e) => {   // a: angle round the face (+ = character's left), tilt: lean of the tip
+      e = e == null ? 0.42 : e;
+      const r = HEAD_R + 0.07, dir = new V3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
+      const b = mesh(strandGeo(), hairM, dir.x * r, dir.y * r, dir.z * r, head);
+      b.scale.set(w, len, 0.14);
+      b.rotation.order = 'YXZ';
+      b.rotation.set(-e - 0.15, a, tilt);   // lies along the forehead, tip over the brow
+    };
+    const cut = BANGS[def.bangs] || BANGS.soft;
+    cut.shell.forEach(([p0, p1, edge]) => fringe(p0, p1, edge));
+    cut.locks.forEach(l => lock(...l));
     // long side locks framing the face, down past the chin
     for (const s of [-1, 1]) {
       const l = mesh(strandGeo(), hairM, s * 0.8, -0.28, 0.34, head);
@@ -193,10 +208,10 @@
         break;
       case 'twintails':
         for (const s of [-1, 1]) {
-          const g = new THREE.Group(); g.position.set(s * 0.78, 0.5, -0.32); g.rotation.z = s * 0.45; head.add(g); swing(g, s, 1);
-          mesh(sphere(0.14), toon(def.accent), 0, 0, 0, g);
-          const t1 = mesh(strandGeo(), hairM, 0, -0.6, -0.05, g); t1.scale.set(0.42, 0.62, 0.42);
-          const t2 = mesh(strandGeo(), tipM, s * -0.04, -1.15, -0.12, g); t2.scale.set(0.3, 0.38, 0.3); t2.rotation.z = s * -0.3;
+          const g = new THREE.Group(); g.position.set(s * 0.86, 0.3, -0.3); g.rotation.z = s * 0.18; head.add(g); swing(g, s, 0.8);
+          mesh(sphere(0.15), soft(def.accent, 0.4), 0, 0, 0, g);
+          const t1 = mesh(strandGeo(), hairM, s * 0.04, -0.62, -0.02, g); t1.scale.set(0.46, 0.66, 0.44);
+          const t2 = mesh(strandGeo(), tipM, s * 0.02, -1.22, -0.04, g); t2.scale.set(0.3, 0.4, 0.3); t2.rotation.z = s * -0.15;
         }
         break;
       case 'lowtails': // big low twin tails hanging behind the ears (like the reference)
@@ -208,9 +223,9 @@
         }
         break;
       case 'ponytail': {
-        const g = new THREE.Group(); g.position.set(0, 0.5, -0.82); g.rotation.x = -0.6; head.add(g); swing(g, 0, 1.2);
-        mesh(sphere(0.15), toon(def.accent), 0, 0, 0, g);
-        const t = mesh(strandGeo(), hairM, 0, -0.65, -0.2, g); t.scale.set(0.42, 0.75, 0.42); t.rotation.x = 0.4;
+        const g = new THREE.Group(); g.position.set(0, 0.38, -1.08); g.rotation.x = 0.45; head.add(g); swing(g, 0, 1.2);
+        mesh(sphere(0.17), soft(def.accent, 0.4), 0, 0, 0, g);
+        const t = mesh(strandGeo(), hairM, 0, -0.78, -0.08, g); t.scale.set(0.48, 0.85, 0.44); t.rotation.x = -0.15;
         break;
       }
       case 'long': {
@@ -289,8 +304,8 @@
       mesh(ruffle(0.25, 0.4, 0.2, 9, 0.12), pantsM, 0, 0.9, 0, body);
       mesh(ruffle(0.33, 0.5, 0.18, 11, 0.14), pantsM, 0, 0.76, 0, body);
     } else {
-      for (const s of [-1, 1]) mesh(capsule(0.155, 0.16), pantsM, s * 0.13, 0.72, 0, legs);   // shorts legs cover the thighs
-      mesh(capsule(0.25, 0.04), pantsM, 0, 0.88, 0, body);
+      for (const s of [-1, 1]) mesh(capsule(0.145, 0.16), pantsM, s * 0.125, 0.73, 0, legs);   // shorts legs cover the thighs
+      const hips = mesh(capsule(0.2, 0.06), pantsM, 0, 0.9, 0, body); hips.scale.set(1.15, 0.8, 0.85);   // slim seat, no bulge
       mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 18), accM, 0, 0.97, 0, body);   // belt
     }
     const torso = mesh(capsule(0.25, 0.2), shirtM, 0, 1.16, 0, body);
