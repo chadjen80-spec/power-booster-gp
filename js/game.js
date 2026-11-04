@@ -32,6 +32,7 @@
   const GAUGE_REGEN = 7;                         // gauge % per second
   const BOOST_MIN = 20;                          // gauge % needed for a short Lv.1-only boost
   const GRAVITY = 34;
+  const MINE_SIZE = 2.7, MINE_HIT = 3.5;   // TNT crate edge and pick-up radius
   const BOUNCE_T = 0.6;
   const SHIELD_CHARGE = 4;   // ultimate charge for a hit the shield blocked (a real hit gives 6-15)   // seconds a hit pops the racer up into the air (visual only)
   const START_EARLY = 0.12, START_LATE = 0.25;   // perfect-start window around GO, in seconds before / after
@@ -1003,7 +1004,7 @@
       for (const m of race.mines) {
         if (m.dead) continue;
         const d = (m.idx - this.idx + N) % N;
-        if (d > 2 && d < 25 && Math.abs(m.lat - lane) < 4) lane = m.lat + (m.lat > 0 ? -6 : 6);
+        if (d > 2 && d < 28 && Math.abs(m.lat - lane) < 5) lane = m.lat + (m.lat > 0 ? -7 : 7);
       }
       // steer around holes: nudge the lane just clear of each one, on whichever side it already is
       for (const h of track.holes) {
@@ -1491,7 +1492,7 @@
       spawnProjectile('bomb', r, pos.addScaledVector(f, 3).add(new V3(0, 1.5, 0)), Math.max(ev.s + 80, 160), null, ev.pid, ev.h);   // well ahead of even a boosting thrower
       if (loud) audio.sfx('fire');
     } else if (ev.it === 'mine') {
-      spawnMine(r, pos.addScaledVector(f, -3.5), ev.pid);
+      spawnMine(r, pos.addScaledVector(f, -4.5), ev.pid);
     } else if (ev.it === 'shield') {
       r.shield = 10; if (r.isPlayer) audio.sfx('shield');
     } else if (ev.it === 'turbo') {
@@ -1630,21 +1631,35 @@
     race.fires.push({ owner, pos, mesh, life: 3, kind });
   }
 
+  function mesh0(geo, mat, x, y, z, parent) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; }
   function spawnMine(owner, pos, pid) {
     const g = new THREE.Group();
-    const crate = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.8, 1.8), PB.toon(0xd03a20));
+    const S = MINE_SIZE;
+    // crate glows red in pulses (see the mine loop) so it reads as a bomb from far off
+    const crateMat = PB.toon(0xd03a20, { emissive: new THREE.Color(0xff2000), emissiveIntensity: 0 });
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(S, S, S), crateMat);
     crate.castShadow = true; g.add(crate);
     const c = document.createElement('canvas'); c.width = 64; c.height = 32;
     const x = c.getContext('2d'); x.fillStyle = '#ffd23a'; x.fillRect(0, 0, 64, 32);
     x.fillStyle = '#d03a20'; x.font = 'bold 26px sans-serif'; x.textAlign = 'center'; x.fillText('TNT', 32, 26);
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
-    label.position.z = 0.91; g.add(label);
-    const l2 = label.clone(); l2.rotation.y = Math.PI; l2.position.z = -0.91; g.add(l2);
+    const labelMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) });
+    for (let k = 0; k < 4; k++) {   // label on all four sides
+      const label = new THREE.Mesh(new THREE.PlaneGeometry(S * 0.82, S * 0.41), labelMat);
+      label.rotation.y = k * Math.PI / 2;
+      label.position.set(Math.sin(k * Math.PI / 2) * (S / 2 + 0.01), 0, Math.cos(k * Math.PI / 2) * (S / 2 + 0.01));
+      g.add(label);
+    }
+    // warning beacon on top and a pulsing red ring on the road
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 8), PB.glow(0xff3020, 1));
+    beacon.position.y = S / 2 + 0.3; g.add(beacon);
+    mesh0(new THREE.CylinderGeometry(0.2, 0.26, 0.24, 10), PB.toon(0x333333), 0, S / 2 + 0.06, 0, g);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(S * 0.75, S * 0.95, 32), PB.glow(0xff2a10, 0.8));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = -S / 2 + 0.06; g.add(ring);
     const idx = race.track.nearest(pos, owner.idx);
-    pos.y = race.track.heightAt(pos, idx) + 0.9;
+    pos.y = race.track.heightAt(pos, idx) + S / 2;
     g.position.copy(pos);
     race.scene.add(g);
-    race.mines.push({ id: pid, owner, pos, mesh: g, immune: 1.0, idx, lat: race.track.lateral(pos, idx), life: 40 });
+    race.mines.push({ id: pid, owner, pos, mesh: g, crateMat, beacon, ring, immune: 1.0, idx, lat: race.track.lateral(pos, idx), life: 40, t: Math.random() });
   }
 
   // projectile blows up: visuals everywhere, bomb splash hits whichever racers this browser simulates
@@ -1787,12 +1802,17 @@
     race.bolts = race.bolts.filter(b => !b.dead);
     // mines
     for (const m of race.mines) {
-      m.immune -= dt; m.life -= dt;
+      m.immune -= dt; m.life -= dt; m.t += dt;
       m.mesh.rotation.y += dt;
+      // warning blink: beacon flashes, crate glows red and the ring pulses out, about twice a second
+      const on = (m.t * 2.2) % 1 < 0.5, f = (m.t * 2.2) % 1;
+      m.beacon.visible = on;
+      m.crateMat.emissiveIntensity = on ? 0.55 : 0;
+      m.ring.scale.setScalar(1 + f * 0.5); m.ring.material.opacity = 0.8 * (1 - f);
       for (const r of race.racers) {
         if (!r.auth || (r === m.owner && m.immune > 0) || veiled(r)) continue;
-        if (r.pos.distanceTo(m.pos) < 2.8) {
-          r.takeHit('spin'); m.dead = true; explode(m.pos.clone(), 5, 0xff5020);
+        if (r.pos.distanceTo(m.pos) < MINE_HIT) {
+          r.takeHit('spin'); m.dead = true; explode(m.pos.clone(), 6, 0xff5020);
           netEvent({ e: 'mine', pid: m.id });
           break;
         }
