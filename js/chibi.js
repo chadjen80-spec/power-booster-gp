@@ -69,7 +69,8 @@
   // ---------- painted face (eyes, lashes, blush, mouth) on a sphere patch over the head ----------
   const FACE = { phiStart: Math.PI / 2 - 1.05, phiLen: 2.1, thetaStart: 1.0, thetaLen: 1.05 };
   function ellipse(x, cx, cy, rx, ry) { x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); }
-  function faceTexture(def) {
+  // closed: the blink frame (lids shut as a soft downward curve with the lashes along it)
+  function faceTexture(def, closed) {
     const c = document.createElement('canvas'); c.width = 512; c.height = 256;
     const x = c.getContext('2d');
     const ec = new THREE.Color(def.eyes);
@@ -77,6 +78,19 @@
     const deep = hex(ec.clone().multiplyScalar(0.35)), mid = hex(ec), light = hex(ec.clone().lerp(new THREE.Color(1, 1, 1), 0.5));
     for (const s of [-1, 1]) {
       const cx = 256 + s * 100, cy = 148, w = 50, h = 68;
+      if (closed) {
+        x.strokeStyle = '#1c1024'; x.lineCap = 'round';
+        x.lineWidth = def.lashes ? 11 : 9;
+        x.beginPath(); x.ellipse(cx, cy + 14, w, 20, 0, Math.PI * 0.08, Math.PI * 0.92); x.stroke();
+        if (def.lashes) {   // outer lash flick
+          const ox = cx + s * (w - 4), oy = cy + 22;
+          x.lineWidth = 6;
+          x.beginPath(); x.moveTo(ox, oy); x.lineTo(ox + s * 15, oy - 6); x.stroke();
+        }
+        x.strokeStyle = hex(new THREE.Color(def.hair).multiplyScalar(0.55)); x.lineWidth = 5;
+        x.beginPath(); x.ellipse(cx, cy - 54, 26, 9, 0, Math.PI * 1.15, Math.PI * 1.85); x.stroke();   // brow dips a touch
+        continue;
+      }
       // eye white, used as clip for the iris
       x.save();
       x.fillStyle = '#ffffff'; ellipse(x, cx, cy + 4, w, h - 4); x.fill();
@@ -160,10 +174,13 @@
     mesh(sphere(HEAD_R, 32, 24), skinM, 0, 0, 0, head);
     const sway = head.userData.sway = [];   // hair groups that swing with turns and wind
     const swing = (g, side, w) => { g.name = 'Hair' + (side < 0 ? 'R' : side > 0 ? 'L' : 'Back') + sway.length; sway.push({ g, side, w, z: g.rotation.z, x: g.rotation.x }); };
+    const open = faceTexture(def), shut = faceTexture(def, true);
+    const faceMat = new THREE.MeshBasicMaterial({ map: open, transparent: true, depthWrite: false });
+    faceMat.userData.maps = [open, shut];   // both get disposed with the model
     const face = new THREE.Mesh(
-      new THREE.SphereGeometry(HEAD_R + 0.006, 40, 20, FACE.phiStart, FACE.phiLen, FACE.thetaStart, FACE.thetaLen),
-      new THREE.MeshBasicMaterial({ map: faceTexture(def), transparent: true, depthWrite: false }));
+      new THREE.SphereGeometry(HEAD_R + 0.006, 40, 20, FACE.phiStart, FACE.phiLen, FACE.thetaStart, FACE.thetaLen), faceMat);
     head.add(face);
+    head.userData.face = { mat: faceMat, open, shut };   // animateRider swaps the map to blink
     // little ears
     for (const s of [-1, 1]) { const e = mesh(sphere(1, 12, 10), skinM, s * 0.88, -0.05, 0.02, head); e.scale.set(0.1, 0.17, 0.12); }
 
@@ -411,6 +428,15 @@
     // board carves on its edge
     m.board.rotation.z = -a.lean * 0.1;
 
+    // blink every few seconds (now and then a quick double blink); eyes squeeze shut while airborne
+    if (m.face) {
+      a.blink -= dt;
+      if (a.blink < -0.11) a.blink = Math.random() < 0.2 ? 0.16 : 1.8 + Math.random() * 3.5;
+      const shut = a.blink < 0 || a.air > 0.6;
+      const map = shut ? m.face.shut : m.face.open;
+      if (m.face.mat.map !== map) m.face.mat.map = map;
+    }
+
     // hair: flung outward by the turn (with lag), streams back in the wind
     a.swayV += ((-a.lean * 0.45 - a.sway) * 50 - a.swayV * 6) * dt;
     a.sway += a.swayV * dt;
@@ -491,7 +517,8 @@
     return { root, body, rider: r.rider, legs: r.legs, upper: r.upper, head: r.head, arms: r.arms, hair: r.head.userData.sway,
       hipY: r.hipY == null ? HIP_Y : r.hipY,
       board: board.group, flames: board.flames, hover: board.hover, shield,
-      anim: { lean: 0, leanV: 0, crouch: 0, sway: 0, swayV: 0, air: 0 } };
+      face: r.head.userData.face || null,
+      anim: { lean: 0, leanV: 0, crouch: 0, sway: 0, swayV: 0, air: 0, blink: 0.5 + Math.random() * 3 } };
   };
 
   // Face-forward portrait (data URL) for menus
@@ -523,7 +550,11 @@
       if (o.geometry) o.geometry.dispose();
       if (o.material) {
         const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach(m => { if (m.map) m.map.dispose(); if (m.emissiveMap && m.emissiveMap !== m.map) m.emissiveMap.dispose(); m.dispose(); });
+        mats.forEach(m => {
+          if (m.map) m.map.dispose(); if (m.emissiveMap && m.emissiveMap !== m.map) m.emissiveMap.dispose();
+          (m.userData.maps || []).forEach(t => t.dispose());   // e.g. the face's blink frame
+          m.dispose();
+        });
       }
     });
   };
