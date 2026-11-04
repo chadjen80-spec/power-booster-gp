@@ -10,7 +10,7 @@
     if (T.active) return;
     T.active = true;
     document.body.classList.add('touch');
-    input.setAutoGas(true);
+    input.setTouchMode(true);
   }
   if (window.matchMedia('(pointer: coarse)').matches) activate();
   window.addEventListener('touchstart', activate, { passive: true });
@@ -18,7 +18,7 @@
   window.addEventListener('keydown', e => {
     if (!T.active || e.repeat || e.code === 'Unidentified') return;
     if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;   // typing a name on the on-screen keyboard
-    T.active = false; document.body.classList.remove('touch'); input.setAutoGas(false);
+    T.active = false; document.body.classList.remove('touch'); input.setTouchMode(false);
   });
 
   // keep receiving a finger's events after it slides off the control (some browsers refuse for odd pointers)

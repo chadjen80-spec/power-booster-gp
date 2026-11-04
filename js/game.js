@@ -93,12 +93,12 @@
   const down = (...codes) => codes.some(c => keys[c]);
   const hit = (...codes) => codes.some(c => pressed.has(c));
   // virtual input for touch controls (js/touch.js): held buttons map onto key codes, steering is analog
-  const vin = { steer: null, autoGas: false };
+  const vin = { steer: null, touch: false };   // touch: on-screen controls are in use
   PB.input = {
     hold(code, on) { if (on && !keys[code]) pressed.add(code); keys[code] = on; },
     tap(code) { pressed.add(code); },
     setSteer(v) { vin.steer = v; },
-    setAutoGas(on) { vin.autoGas = on; },
+    setTouchMode(on) { vin.touch = on; },
   };
 
   // ---------------- menu showroom ----------------
@@ -912,7 +912,8 @@
       // --- control source ---
       if (this.isPlayer && !this.finished) {
         inp.brake = down('KeyS', 'ArrowDown') ? 1 : 0;
-        inp.throttle = down('KeyW', 'ArrowUp') || (vin.autoGas && !inp.brake) ? 1 : 0;   // touch: gas is always on
+        // touch: hold GO to run; holding DRIFT runs too, so one thumb can drift without also holding GO
+        inp.throttle = down('KeyW', 'ArrowUp') || (vin.touch && down('Space')) ? 1 : 0;
         inp.steer = vin.steer !== null ? vin.steer : (down('KeyA', 'ArrowLeft') ? 1 : 0) - (down('KeyD', 'ArrowRight') ? 1 : 0);
         inp.drift = down('Space');
         if (canControl) {
@@ -1640,7 +1641,7 @@
       slot.classList.remove('rolling');
       const it = p.item ? ITEMS[p.item] : null;
       showItemIcon(slot, p.item);
-      setText('hud-item-name', it ? it.name + (vin.autoGas ? '' : ' [E]') : '');
+      setText('hud-item-name', it ? it.name + (vin.touch ? '' : ' [E]') : '');
     }
     // the slot only appears while an item is rolling or in hand; the touch button dims when there's nothing to use
     const holding = p.rolling > 0 || !!p.item;
@@ -1668,7 +1669,7 @@
       setText('hud-boost-state', p.boostMax === 1 ? 'BOOST Lv.1' : p.stage < 3 ? `BOOST Lv.${p.stage} → Lv.${p.stage + 1}` : 'MAX BOOST!!');
       setText('hud-boost-count', String(Math.ceil(p.stageTimer)));
     } else {
-      setText('hud-boost-state', p.gauge >= 100 ? (vin.autoGas ? 'พร้อมแล้ว! กด BOOST' : 'พร้อมแล้ว! กด SHIFT')
+      setText('hud-boost-state', p.gauge >= 100 ? (vin.touch ? 'พร้อมแล้ว! กด BOOST' : 'พร้อมแล้ว! กด SHIFT')
         : p.gauge >= BOOST_MIN ? `ชาร์จ ${Math.floor(p.gauge)}% • กดได้ (Lv.1)` : `ชาร์จพลัง ${Math.floor(p.gauge)}%`);
       setText('hud-boost-count', '');
     }

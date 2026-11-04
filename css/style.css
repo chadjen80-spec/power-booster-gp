@@ -192,17 +192,20 @@ body.touch #touch-ui { display: block; }
   font-weight: 600; color: #fff; border: 2px solid rgba(255,255,255,0.5); background: rgba(20,14,50,0.55); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center; font-size: 15px; }
 .t-btn.down { transform: scale(0.92); filter: brightness(1.6); }
-.t-boost { right: calc(18px + env(safe-area-inset-right)); bottom: 22px; width: 92px; height: 92px; font-family: 'Orbitron', sans-serif; font-size: 14px;
+/* bottom row, right to left: GO (right thumb's resting spot), BOOST, DRIFT, BRAKE; ITEM sits above DRIFT/BOOST */
+.t-gas { right: calc(18px + env(safe-area-inset-right)); bottom: 22px; width: 92px; height: 92px; font-size: 18px;
+  background: radial-gradient(circle, rgba(60,230,140,0.7), rgba(10,70,50,0.6)); border-color: #4dffa0; box-shadow: 0 0 16px rgba(77,255,160,0.5); }
+.t-boost { right: calc(120px + env(safe-area-inset-right)); bottom: 20px; width: 78px; height: 78px; font-family: 'Orbitron', sans-serif; font-size: 13px;
   background: radial-gradient(circle, rgba(255,58,208,0.7), rgba(80,10,80,0.6)); border-color: var(--pink); box-shadow: 0 0 18px rgba(255,58,208,0.6); }
 .t-boost { flex-direction: column; line-height: 1.1; transition: opacity .15s, box-shadow .2s; }
 .t-boost small { font-family: 'Kanit', sans-serif; font-size: 11px; font-weight: 400; opacity: .9; }
 .t-boost.low { opacity: 0.45; }
 .t-boost.full { border-color: var(--gold); background: radial-gradient(circle, rgba(255,210,58,0.85), rgba(255,58,208,0.65));
   box-shadow: 0 0 22px rgba(255,210,58,0.9); animation: pulse .8s infinite; }
-.t-drift { right: calc(124px + env(safe-area-inset-right)); bottom: 16px; width: 78px; height: 78px; border-color: var(--gold); }
-.t-item { right: calc(110px + env(safe-area-inset-right)); bottom: 104px; width: 70px; height: 70px; border-color: var(--cyan); transition: opacity .15s; }
+.t-drift { right: calc(208px + env(safe-area-inset-right)); bottom: 16px; width: 72px; height: 72px; border-color: var(--gold); }
+.t-item { right: calc(200px + env(safe-area-inset-right)); bottom: 106px; width: 64px; height: 64px; border-color: var(--cyan); transition: opacity .15s; }
 .t-item.empty { opacity: 0.4; }
-.t-brake { right: calc(214px + env(safe-area-inset-right)); bottom: 12px; width: 60px; height: 60px; font-size: 13px; }
+.t-brake { right: calc(290px + env(safe-area-inset-right)); bottom: 12px; width: 58px; height: 58px; font-size: 13px; }
 #t-pause { top: calc(10px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); width: 44px; height: 44px; border-radius: 12px; font-family: 'Orbitron', sans-serif; }
 
 /* HUD moves out of the thumbs' way */
