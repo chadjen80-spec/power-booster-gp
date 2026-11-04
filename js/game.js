@@ -32,6 +32,7 @@
   const GAUGE_REGEN = 7;                         // gauge % per second
   const BOOST_MIN = 20;                          // gauge % needed for a short Lv.1-only boost
   const GRAVITY = 34;
+  const START_EARLY = 0.12, START_LATE = 0.25;   // perfect-start window around GO, in seconds before / after
   const DIFFICULTY = [{ skill: [0.78, 0.86], rubber: 0.06, item: 0.6 }, { skill: [0.86, 0.94], rubber: 0.09, item: 1 }, { skill: [0.93, 1.0], rubber: 0.12, item: 1.4 }];
 
   // Item-slot picture of the TNT crate, matching the red box with the yellow TNT label dropped on the track
@@ -109,6 +110,7 @@
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
   const down = (...codes) => codes.some(c => keys[c]);
   const hit = (...codes) => codes.some(c => pressed.has(c));
+  const gasHit = () => hit('KeyW', 'ArrowUp') || (vin.touch && hit('Space'));   // a fresh press of the throttle (touch DRIFT also runs)
   // virtual input for touch controls (js/touch.js): held buttons map onto key codes, steering is analog
   const vin = { steer: null, touch: false };   // touch: on-screen controls are in use
   PB.input = {
@@ -842,6 +844,12 @@
       return true;
     }
 
+    // perfect start: one stage of Booster Lv.2 straight off the line; it does not use or empty the gauge
+    startBoost() {
+      this.stage = 2; this.boostMax = 2; this.stageTimer = this.stageDur = STAGE_TIME;
+      if (this.isPlayer) { audio.sfx('boost2'); bigMsg('PERFECT START! BOOST Lv.2', true); race.shake = 0.3; stat(this, 'perfectstart'); }
+    }
+
     // ultimate meter: fills from driving well (drifts, air time, items) and faster for racers further back
     chargeUlt(amount) {
       if (!this.def.ult || this.stage === 4) return;
@@ -1042,7 +1050,7 @@
             if (this.isPlayer) { audio.sfx('boost' + this.stage); bigMsg(this.stage === 3 ? 'MAX BOOST!!' : 'BOOST Lv.' + this.stage, true); race.shake = 0.3; }
           } else if (this.stage === 3 && this.boostMax === 3 && this.def.ult && this.ult >= 100) {
             this.startUltimate();
-          } else { this.stage = 0; this.gauge = 0; }
+          } else { this.stage = 0; if (this.boostMax !== 2) this.gauge = 0; }   // the start boost keeps the gauge
         }
       } else if (canControl) {
         this.gauge = Math.min(100, this.gauge + GAUGE_REGEN * dt);
@@ -1735,7 +1743,7 @@
     const track = PB.buildTrack(tdef, scene);
     race = { scene, track, racers: [], boxes: [], projectiles: [], mines: [], effects: [], fires: [], bolts: [], time: 0, phase: 'countdown', cd: 4.2, stats: {},
       shake: 0, flash: 0, paused: false, standingsT: 0, finishT: 0, camPos: null, camLook: null,
-      online: !!grid && PB.net.connected(), pidSeq: 0, netT: 0 };
+      online: !!grid && PB.net.connected(), pidSeq: 0, netT: 0, start: { state: 'wait' } };
     race.particles = new PB.fx.Particles(scene, Q.particles);
     scene.add(camera);                       // speed lines ride on the camera
     race.lines = new PB.fx.SpeedLines(camera, Q.speedLines);
@@ -2091,13 +2099,20 @@
       // start lights: one more red per count, all green on GO
       const reds = now2 <= 3 ? 4 - Math.max(now2, 1) : 0;
       race.track.startLights.forEach((l, k) => l.material.color.setHex(race.cd <= 1 ? 0x30ff50 : k < reds && k < 3 ? 0xff2a2a : 0x2a0808));
-      // rocket start: hold throttle in the final half second
-      if (race.cd < 1.5 && race.cd > 1.0 && down('KeyW', 'ArrowUp')) race.rocket = true;
+      // perfect start: press GO right as "GO!" shows (a press earlier in the countdown is a false start)
+      if (gasHit() && race.start.state === 'wait') {
+        race.start.state = race.cd > 1 + START_EARLY ? 'early' : 'hit';
+        if (race.start.state === 'early') bigMsg('เร็วไป!', true);
+      }
       if (race.cd <= 1) {
         race.phase = 'race';
         bigMsg('GO!', true); audio.sfx('go');
-        if (race.rocket) { race.player.turbo = 1.3; audio.sfx('turbo'); }
+        if (race.start.state === 'hit') { race.start.state = 'done'; race.player.startBoost(); }
+        // bots get a perfect start now and then (more often on harder difficulties)
+        for (const r of race.racers) if (r.ctrl === 'bot' && r.auth && Math.random() < 0.15 + state.diff * 0.1) r.startBoost();
       }
+    } else if (race.start.state === 'wait' && race.time <= START_LATE) {
+      if (gasHit()) { race.start.state = 'done'; race.player.startBoost(); }
     }
     const canControl = race.phase !== 'countdown';
 
