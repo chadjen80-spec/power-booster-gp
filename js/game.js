@@ -187,6 +187,7 @@
     else goScreen('lobby');
   });
   $('btn-tracks').addEventListener('click', () => goScreen('track'));
+  $('btn-chars').addEventListener('click', () => { state.mode = 'solo'; goScreen('char'); });   // pick a racer, then a track
   // title extras (How to play / Settings): small panels that open on demand and close on a tap elsewhere
   const closePops = () => document.querySelectorAll('.t-pop').forEach(p => p.classList.add('hidden')) ||
     document.querySelectorAll('[data-pop]').forEach(b => b.classList.remove('on'));
@@ -1830,6 +1831,7 @@
     updatePassBadge();
     $('btn-again').textContent = race.ranked ? 'Ranked อีกรอบ' : online ? (PB.net.isHost() ? 'กลับล็อบบี้ (ทุกคน)' : 'กลับล็อบบี้') : 'แข่งอีกครั้ง';
     $('btn-tracks').classList.toggle('hidden', online || !!race.ranked);
+    $('btn-chars').classList.toggle('hidden', online || !!race.ranked);
     renderRankedResult();
     $('scr-results').classList.add('show');
     audio.stopEngine();
