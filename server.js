@@ -20,7 +20,7 @@ const ranked = require('./ranked');
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const MAX_PLAYERS = 8;
-const MAX_TRACK = 4;   // highest index in PB.TRACKS (js/track.js)
+const MAX_TRACK = 5;   // highest index in PB.TRACKS (js/track.js)
 const CHAR_IDS = ['nova', 'blaze', 'frost', 'leaf', 'ruby', 'dusk', 'sky', 'sunny'];
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json',

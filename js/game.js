@@ -700,7 +700,7 @@
       const pts = PB.trackPreview(t, 200);
       const ctx = cv.getContext('2d');
       const bg = { cove: ['#1aa3c9', '#7fe0ff'], neon: ['#0a0420', '#3a0f5a'], volcano: ['#40100a', '#ff8a40'],
-        sky: ['#4aa0ff', '#ffe6f5'], snow: ['#061230', '#7ab0e0'] }[t.theme];
+        sky: ['#4aa0ff', '#ffe6f5'], snow: ['#061230', '#7ab0e0'], abyss: ['#021c28', '#0b7a8a'] }[t.theme];
       const gr = ctx.createLinearGradient(0, 0, 0, 200); gr.addColorStop(0, bg[0]); gr.addColorStop(1, bg[1]);
       ctx.fillStyle = gr; ctx.fillRect(0, 0, 280, 200);
       drawPath(ctx, pts, 280, 200, 22, t.theme === 'neon' ? '#22f0ff' : '#ffffff', 7);

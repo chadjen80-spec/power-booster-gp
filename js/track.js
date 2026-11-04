@@ -30,6 +30,13 @@
   PB.BOSS_TRACK = { id: 'abyss', name: 'Abyss Run', th: 'ทางหนีใต้ทะเลลึก', desc: 'หนีปลาตะพัดยักษ์ไฟฟ้า', theme: 'abyss', width: 20, scale: 1.6,
     pts: [[0, 0, 0], [220, 2, 10], [400, 6, -40], [520, 8, -160], [540, 6, -320], [460, 2, -460], [300, 0, -520], [120, 4, -480],
       [-60, 8, -520], [-240, 6, -480], [-360, 2, -360], [-380, 0, -200], [-300, 0, -80], [-160, 0, -20]] };
+  // the sea-floor theme as a normal 3-lap race track: its own long, twisting layout (the boss course stays gentle for dodging)
+  PB.TRACKS.push({ id: 'abyss', name: 'Abyss Run', th: 'ทางหนีใต้ทะเลลึก', desc: 'วิหารโบราณใต้ทะเล โค้งคดเคี้ยว โค้งหักศอก และกระโดดข้ามซากเสา',
+    theme: 'abyss', features: 'abyssRace', width: 20, scale: 1.6,
+    pts: [[0, 0, 0], [180, 2, 0], [290, 4, -50], [300, 6, -150], [220, 8, -210], [240, 6, -310], [350, 4, -350], [440, 2, -300],
+      [480, 4, -190], [560, 6, -160], [610, 8, -260], [580, 6, -400], [470, 4, -500], [330, 2, -560], [190, 4, -520], [110, 6, -600],
+      [-20, 8, -640], [-140, 6, -580], [-120, 4, -470], [-30, 2, -420], [-60, 0, -320], [-180, 2, -300], [-280, 4, -360], [-360, 6, -270],
+      [-330, 4, -150], [-240, 2, -90], [-300, 0, 0], [-170, 0, 40]] });
 
   // Ramps, gaps and holes, placed by lap fraction (kept clear of item boxes at .1/.35/.6/.85 and boost pads at .27/.52/.76).
   // jump: ramp across the road, then a gap of `gap` units (0 = just air time). hole: round pit at lateral `lat` (fraction of width).
@@ -39,7 +46,9 @@
     volcano: [{ type: 'jump', at: 0.065, gap: 24 }, { type: 'jump', at: 0.425, gap: 22 }, { type: 'jump', at: 0.57, gap: 0 }, { type: 'jump', at: 0.722, gap: 26 }],
     sky: [{ type: 'jump', at: 0.118, gap: 26 }, { type: 'jump', at: 0.36, gap: 26 }, { type: 'jump', at: 0.44, gap: 0 }, { type: 'jump', at: 0.69, gap: 24 },
       { type: 'jump', at: 0.79, gap: 0 }, { type: 'jump', at: 0.93, gap: 22 }],
-    abyss: [],
+    abyss: [],   // boss stage: dodging is the game
+    abyssRace: [{ type: 'jump', at: 0.045, gap: 0 }, { type: 'jump', at: 0.32, gap: 26 }, { type: 'jump', at: 0.42, gap: 0 }, { type: 'jump', at: 0.54, gap: 24 },
+      { type: 'jump', at: 0.93, gap: 22 }],
     snow: [{ type: 'jump', at: 0.055, gap: 0 }, { type: 'jump', at: 0.335, gap: 20 }, { type: 'jump', at: 0.44, gap: 22 }, { type: 'jump', at: 0.71, gap: 20 }, { type: 'jump', at: 0.93, gap: 0 }],
   };
   const RAMP_LEN = 4, RAMP_H = 2;   // ramp length in samples (2.5u each) and lip height
@@ -273,7 +282,7 @@
 
     // --- jumps, gaps and holes ---
     const gaps = [], ramps = [], holes = [];
-    for (const f of FEATURES[def.theme] || []) {
+    for (const f of FEATURES[def.features || def.theme] || []) {
       const i0 = Math.floor(f.at * N);
       if (f.type === 'jump') {
         ramps.push({ i0, i1: i0 + RAMP_LEN });
