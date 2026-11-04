@@ -273,6 +273,24 @@ body.touch .hud-tl { left: calc(14px + env(safe-area-inset-left)); }
   .char-grid { gap: 6px; }
   .char-name { font-size: 20px; }
   .stat { margin: 2px 0; }
+  /* character select on a phone: no heading, name + title on one line, so the stats fit without scrolling */
+  #scr-char .panel h2 { display: none; }
+  #scr-char .char-card span { font-size: 12px; }
+  #scr-char .char-info { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; }
+  #scr-char .char-info > * { flex: 1 1 100%; }
+  #scr-char .char-name, #scr-char .char-title { flex: 0 0 auto; margin: 0; }
+  #scr-char .char-title { font-size: 13px; }
+  #scr-char .char-ult { font-size: 12px; margin: 2px 0 4px; line-height: 1.35; }
+  #scr-char .stat { grid-template-columns: 74px 1fr; font-size: 13px; margin: 1px 0; }
+  #scr-char .stat .bar { height: 8px; }
+}
+/* very short phones: all eight racers in one row */
+@media (max-height: 420px) {
+  #scr-char .char-grid { grid-template-columns: repeat(8, 1fr); gap: 5px; }
+  #scr-char .char-card { border-radius: 8px; }
+  #scr-char .char-card span { font-size: 10px; padding: 1px 0; }
+}
+@media (max-height: 520px) {
   .track-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
   .track-card { padding: 6px; }
   .track-card p { display: none; }
