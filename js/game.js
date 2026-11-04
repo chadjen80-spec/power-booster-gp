@@ -10,8 +10,25 @@
 
   const LAPS = 3;
   const STAGE_TIME = 3;                          // seconds per booster stage
-  const BOOST_MUL = [1, 1.25, 1.5, 1.8];         // top-speed multiplier per booster stage
-  const BOOST_COLORS = [0, 0x22e6ff, 0xff3ad0, 0xffffff];
+  const BOOST_MUL = [1, 1.25, 1.5, 1.8, 1.8];    // top-speed multiplier per booster stage (Lv.4 keeps Lv.3 speed)
+  const BOOST_COLORS = [0, 0x22e6ff, 0xff3ad0, 0xffffff, 0xffffff];
+  // Lv.4 ultimates (character def.ult). Each gets the same budget: 2.5s, no extra speed, power comes from the effect.
+  // Lv.4 follows Lv.3 by itself only when the separate ultimate meter is full; the meter fills faster further back.
+  const ULT_TIME = 2.5;
+  const ULTS = {
+    flame: { name: 'ทางไฟ', desc: 'ทิ้งไฟไว้ข้างหลัง ใครวิ่งทับจะช้าลง (โล่กันได้)', color: 0xff5a10 },
+    glide: { name: 'ร่อนลม', desc: 'กระโดดลอยร่อนข้ามช่องว่างและสิ่งกีดขวาง', color: 0x5aff8a },
+    veil: { name: 'ล่องหน', desc: 'ล่องหน ไม่โดนโจมตี มิสไซล์ล็อกเป้าไม่ได้', color: 0x9a6aff },
+    thruster: { name: 'ไฟไอพ่นยักษ์', desc: 'ไฟไอพ่นลูกใหญ่ ใครโดนชนจะกระเด็นและช้าลง (โล่กันได้)', color: 0x66ffee },
+    ice: { name: 'ถนนน้ำแข็ง', desc: 'ทิ้งน้ำแข็งไว้ข้างหลัง ใครวิ่งทับจะลื่นไถล', color: 0x9ae8ff },
+    storm: { name: 'ลมพายุ', desc: 'พายุหมุนรอบตัว ผลักคนใกล้ๆ ให้กระเด็นออกด้านข้าง', color: 0xd8f6ff },
+    lightning: { name: 'สายฟ้า', desc: 'ฟ้าผ่าคนที่อยู่ใกล้ที่สุด 1 คนให้ช็อต (โล่กันได้)', color: 0xffe14a },
+    radiant: { name: 'พลังแสง', desc: 'ล้างสถานะไม่ดี กันการชนและสิ่งกีดขวาง และกันการโจมตีได้ 1 ครั้ง', color: 0xffd23a },
+  };
+  // status effects from other racers' ultimates don't touch Shadow Veil or Radiant
+  const unstoppable = r => r.stage === 4 && (r.def.ult === 'veil' || r.def.ult === 'radiant');
+  const veiled = r => r.stage === 4 && r.def.ult === 'veil';
+  const CORK_TURNS = 3, CORK_PIVOT = 1.6;   // Wind Glide roll: full turns, and pivot height (mid-rider) above the board
   const GAUGE_REGEN = 7;                         // gauge % per second
   const BOOST_MIN = 20;                          // gauge % needed for a short Lv.1-only boost
   const GRAVITY = 34;
@@ -385,6 +402,9 @@
     } else if (m.e === 'boom') {
       const p = race.projectiles.find(q => q.id === m.pid);
       if (p) { p.pos.set(m.x, m.y, m.z); detonate(p); }
+    } else if (m.e === 'ult') {
+      const r = race.racers.find(q => q.netId === m.r), tg = race.racers.find(q => q.netId === m.tg) || null;
+      if (r && !r.auth) lightningStrike(r, tg);
     } else if (m.e === 'mine') {
       const mn = race.mines.find(q => q.id === m.pid);
       if (mn && !mn.dead) { mn.dead = true; explode(mn.pos.clone(), 5, 0xff5020); }
@@ -428,6 +448,8 @@
     document.querySelectorAll('.char-card').forEach((d, k) => d.classList.toggle('sel', k === i));
     $('char-name').textContent = c.name;
     $('char-title').textContent = c.title;
+    const u = c.ult && ULTS[c.ult];
+    $('char-ult').innerHTML = u ? `★ ท่าไม้ตาย Lv.4: <b>${u.name}</b> — ${u.desc}` : 'ท่าไม้ตาย Lv.4: ยังไม่มี (เร็วๆ นี้)';
     $('st-speed').style.width = c.stats.speed * 20 + '%';
     $('st-accel').style.width = c.stats.accel * 20 + '%';
     $('st-handling').style.width = c.stats.handling * 20 + '%';
@@ -731,6 +753,9 @@
       this.finished = false; this.finishTime = 0; this.place = 8;
       this.item = null; this.rolling = 0; this.pendingItem = null;
       this.gauge = rand(40, 70); this.stage = 0; this.stageTimer = 0; this.stageDur = STAGE_TIME; this.boostMax = 3;
+      this.ult = rand(0, 30);   // ultimate meter (only used when def.ult is set)
+      this.burn = 0; this.glided = false; this.fireAcc = 0; this.veilShown = false;
+      this.icy = 0; this.knockT = 0;   // Ice Road slide / Mega Thruster knock cooldown
       this.turbo = 0; this.spin = 0; this.shield = 0; this.shock = 0;
       this.drifting = false; this.driftDir = 0; this.driftTime = 0;
       this.steerVis = 0; this.hop = 0; this.bob = Math.random() * 10; this.wallCd = 0;
@@ -805,9 +830,65 @@
       return true;
     }
 
+    // ultimate meter: fills from driving well (drifts, air time, items) and faster for racers further back
+    chargeUlt(amount) {
+      if (!this.def.ult || this.stage === 4) return;
+      this.ult = Math.min(100, this.ult + amount * (1 + (this.place - 1) * 0.12));
+    }
+
+    startUltimate() {
+      const u = ULTS[this.def.ult];
+      this.stage = 4; this.stageTimer = this.stageDur = ULT_TIME; this.ult = 0;
+      stat(this, 'ultimate');
+      if (this.def.ult === 'glide' && !this.falling) {   // leap up and float
+        this.air = true; this.vy = Math.max(this.vy, 11); this.airTime = 0; this.onRamp = null; this.drifting = false;
+      }
+      this.glided = this.def.ult === 'glide';
+      if (this.def.ult === 'radiant') {   // shake everything off and keep a one-hit guard for the duration
+        this.spin = 0; this.shock = 0; this.burn = 0; this.icy = 0;
+        this.shield = Math.max(this.shield, ULT_TIME);
+      }
+      if (this.def.ult === 'lightning') {   // strike the nearest racer (ahead first) within range
+        const cands = race.racers.filter(r => r !== this && !r.finished && !veiled(r) && r.pos.distanceTo(this.pos) < 60);
+        cands.sort((a, b) => (a.place < this.place ? 0 : 30) + a.pos.distanceTo(this.pos) - ((b.place < this.place ? 0 : 30) + b.pos.distanceTo(this.pos)));
+        const tgt = cands[0] || null;
+        lightningStrike(this, tgt);
+        netEvent({ e: 'ult', r: this.netId, tg: tgt ? tgt.netId : null });
+      }
+      if (this.isPlayer) { audio.sfx('boost3'); bigMsg(`★ ${u.name}! ★`, true); race.shake = 0.4; }
+      else if (near(this)) bigMsg(`${this.name}: ${u.name}!`, true);
+    }
+
+    // Flame Road: slower top speed for a second; a shield soaks it, a veiled racer passes through
+    applyBurn() {
+      if (!this.auth || this.burn > 0 || unstoppable(this) || this.respawnT > 0) return;
+      if (this.shield > 0) { this.shield = 0; spawnBurst(this.pos.clone().add(new V3(0, 1.6, 0)), 0x44ccff, 3.5); return; }
+      this.burn = 1.0; this.speed *= 0.85;
+      if (this.isPlayer) { audio.sfx('hit'); bigMsg('ไฟลวก!', true); }
+    }
+
+    // Ice Road: the board slides for a moment (terrain, so a shield doesn't help)
+    applyIce() {
+      if (!this.auth || this.icy > 0 || unstoppable(this) || this.respawnT > 0) return;
+      this.icy = 1.1;
+      if (this.isPlayer) bigMsg('ลื่น!', true);
+    }
+
+    // Mega Thruster / Storm Wind: shoved sideways away from `from`, losing some speed; a shield soaks one knock
+    knock(from, strength) {
+      if (!this.auth || this.knockT > 0 || unstoppable(this) || this.respawnT > 0 || this.falling) return;
+      this.knockT = 0.8;
+      if (this.shield > 0) { this.shield = 0; spawnBurst(this.pos.clone().add(new V3(0, 1.6, 0)), 0x44ccff, 3.5); return; }
+      const dx = this.pos.x - from.pos.x, dz = this.pos.z - from.pos.z, d = Math.hypot(dx, dz) || 1;
+      this.pos.x += dx / d * strength; this.pos.z += dz / d * strength;
+      this.speed *= strength > 3 ? 0.5 : 0.8;
+      this.hop = 0.35;
+      if (this.isPlayer) { audio.sfx('bump'); race.shake = Math.max(race.shake, 0.4); }
+    }
+
     takeHit(kind) {
       if (!this.auth) return;   // the browser that simulates a racer decides its hits
-      if (this.respawnT > 0 || this.falling) return;
+      if (this.respawnT > 0 || this.falling || veiled(this)) return;
       if (this.finished && !this.isPlayer) return;
       if (this.shield > 0) {
         this.shield = 0;
@@ -840,10 +921,11 @@
       const ev = { e: 'item', r: this.netId, it, x: this.pos.x, y: this.pos.y, z: this.pos.z, h: this.heading, s: this.speed,
         pid: `${race.online ? PB.net.id : 'L'}-${race.pidSeq++}` };
       if (it === 'missile') {
-        const target = race.racers.filter(r => r !== this && !r.finished && r.place < this.place).sort((a, b) => b.place - a.place)[0];
+        const target = race.racers.filter(r => r !== this && !r.finished && !veiled(r) && r.place < this.place).sort((a, b) => b.place - a.place)[0];
         ev.tg = target ? target.netId : null;
       }
       applyItem(this, ev);
+      this.chargeUlt(6);
       netEvent(ev);
     }
 
@@ -946,14 +1028,20 @@
             this.stage++; this.stageTimer = this.stageDur = STAGE_TIME;
             if (this.stage === 3) stat(this, 'maxboost');
             if (this.isPlayer) { audio.sfx('boost' + this.stage); bigMsg(this.stage === 3 ? 'MAX BOOST!!' : 'BOOST Lv.' + this.stage, true); race.shake = 0.3; }
+          } else if (this.stage === 3 && this.boostMax === 3 && this.def.ult && this.ult >= 100) {
+            this.startUltimate();
           } else { this.stage = 0; this.gauge = 0; }
         }
       } else if (canControl) {
         this.gauge = Math.min(100, this.gauge + GAUGE_REGEN * dt);
       }
+      if (canControl && this.stage < 4) this.chargeUlt(0.6 * dt);
+      this.burn = Math.max(0, this.burn - dt);
+      this.icy = Math.max(0, this.icy - dt);
+      this.knockT = Math.max(0, this.knockT - dt);
 
       // --- speed ---
-      let top = this.maxSpeed * BOOST_MUL[this.stage] * (this.turbo > 0 ? 1.3 : 1) * (this.shock > 0 ? 0.6 : 1);
+      let top = this.maxSpeed * BOOST_MUL[this.stage] * (this.turbo > 0 ? 1.3 : 1) * (this.shock > 0 ? 0.6 : 1) * (this.burn > 0 ? 0.7 : 1);
       if (!this.isPlayer || this.finished) top *= this.aiFactor();
       let throttle = inp.throttle, steer = inp.steer;
       if (this.spin > 0) { throttle = 0; steer = 0; }
@@ -980,6 +1068,7 @@
       if (this.drifting) {
         if (!inp.drift || this.speed < 18 || this.spin > 0) {
           if (this.driftTime > 0.9 && this.spin <= 0) {
+            this.chargeUlt(this.driftTime > 2 ? 18 : 10);
             this.turbo = Math.max(this.turbo, this.driftTime > 2 ? 1.2 : 0.7);
             stat(this, 'drift');
             if (this.isPlayer) audio.sfx('turbo');
@@ -990,13 +1079,13 @@
           eff = this.driftDir * 0.65 + steer * 0.55;
         }
       }
-      const handling = this.turnRate * (1 - 0.1 * this.stage) * (this.drifting ? 1.3 : 1) * (this.air ? 0.45 : 1);
+      const handling = this.turnRate * (1 - 0.1 * this.stage) * (this.drifting ? 1.3 : 1) * (this.air ? (this.glided ? 0.8 : 0.45) : 1);
       const sf = clamp(Math.abs(this.speed) / 22, 0, 1);
       this.heading += eff * handling * sf * dt * Math.sign(this.speed || 1);
       if (this.spin > 0) this.speed *= Math.pow(0.4, dt);
 
       // --- move --- (on ice the travel direction catches up with the nose slowly, so the board slides)
-      const grip = track.theme.grip || 30;
+      const grip = Math.min(track.theme.grip || 30, this.icy > 0 ? 2.5 : 99);   // Ice Road: the board slides
       if (!this.air) this.moveHeading += wrapAngle(this.heading - this.moveHeading) * Math.min(1, grip * dt * (this.drifting ? 0.7 : 1));
       this.pos.x += Math.sin(this.moveHeading) * this.speed * dt;
       this.pos.z += Math.cos(this.moveHeading) * this.speed * dt;
@@ -1029,7 +1118,7 @@
       // --- ground: ramps launch, gaps and holes drop you ---
       const g = track.groundAt(this.pos, this.idx);
       if (this.air) {
-        this.vy -= GRAVITY * dt;
+        this.vy -= GRAVITY * (this.glided && this.stage === 4 ? 0.25 : 1) * dt;   // Wind Glide floats
         this.pos.y += this.vy * dt;
         this.airTime += dt;
         if (!g.hole && this.pos.y <= g.y) this.landed(g.y);
@@ -1079,7 +1168,9 @@
     // hang time pays out a landing boost, like CTR
     landed(groundY) {
       this.air = false; this.pos.y = groundY; this.vy = 0; this.land = 0.25;
-      const big = this.airTime > 0.6 && this.spin <= 0;
+      const big = this.airTime > 0.6 && this.spin <= 0 && !this.glided;
+      if (big) this.chargeUlt(Math.min(this.airTime, 2) * 8);
+      this.glided = false;
       if (big) { this.turbo = Math.max(this.turbo, 0.5 + Math.min(this.airTime, 1.6) * 0.5); stat(this, 'air'); }
       if (near(this)) race.particles.emit(18, { pos: this.pos.clone().add(new V3(0, 0.4, 0)), spread: 7, vel: new V3(0, 3, 0),
         color: 0xffffff, life: 0.5, size: [1.2, 0.3], drag: 3 });
@@ -1153,6 +1244,13 @@
       m.root.visible = !(this.respawnT > 0 && Math.floor(this.respawnT * 12) % 2 === 0);
       this.steerVis += ((this.spin > 0 ? 0 : inp.steer) - this.steerVis) * Math.min(1, 8 * dt);
       m.body.rotation.z = -this.steerVis * 0.2 - (this.drifting ? this.driftDir * 0.12 : 0);
+      // Wind Glide: corkscrew roll around the direction of travel, pivoting at the rider's middle;
+      // eased 3 full turns, so it ends upright exactly when the ultimate does
+      const roll = this.stage === 4 && this.def.ult === 'glide' ? this.corkscrewAngle() : 0;
+      if (roll) {
+        m.body.rotation.z = roll;
+        m.body.position.set(CORK_PIVOT * Math.sin(roll), CORK_PIVOT * (1 - Math.cos(roll)), 0);
+      } else if (m.body.position.x || m.body.position.y) m.body.position.set(0, 0, 0);
       if (this.spin > 0) m.body.rotation.y = (1.4 - this.spin) * 11;
       else m.body.rotation.y += ((this.drifting ? this.driftDir * 0.5 : 0) - wrapAngle(m.body.rotation.y)) * Math.min(1, 10 * dt);
       // turning pose; while spun out by a hit the rider flails left and right
@@ -1161,19 +1259,23 @@
         drift: this.drifting ? this.driftDir : 0, stage: this.stage, speed: this.speed, time: race.time,
         air: this.air || this.falling ? 1 : 0 });
       m.shield.visible = this.shield > 0;
+      m.shield.material.color.setHex(this.stage === 4 && this.def.ult === 'radiant' ? 0xffd23a : 0x44ccff);
       if (m.shield.visible) m.shield.material.opacity = 0.2 + Math.sin(race.time * 10) * 0.06;
       // shock flicker
       m.rider.visible = !(this.shock > 0 && Math.floor(race.time * 20) % 2 === 0);
+      this.ultimateEffects(dt);
 
       // flames: size and color by state
       const power = Math.max(this.input.throttle * 0.6, 0.25) + this.stage * 0.45 + (this.turbo > 0 ? 0.6 : 0);
       let col = this.def.flame;
-      if (this.stage > 0) col = BOOST_COLORS[this.stage];
+      if (this.stage === 4) col = ULTS[this.def.ult].color;
+      else if (this.stage > 0) col = BOOST_COLORS[this.stage];
       else if (this.turbo > 0) col = 0xff8a20;
       else if (this.drifting) col = this.driftTime > 2 ? 0xff5020 : this.driftTime > 0.9 ? 0xffe040 : 0x80c0ff;
+      const mega = this.stage === 4 && this.def.ult === 'thruster' ? 2.4 : 1;   // Mega Thruster: much bigger jets
       for (const f of m.flames) {
-        const len = power * (0.9 + Math.random() * 0.25);
-        f.outer.scale.set(1 + this.stage * 0.25, len, 1 + this.stage * 0.25);
+        const len = power * (0.9 + Math.random() * 0.25) * mega;
+        f.outer.scale.set((1 + this.stage * 0.25) * mega, len, (1 + this.stage * 0.25) * mega);
         f.outer.position.z = -2.15 - 0.7 * len;
         f.core.scale.set(1, len * 0.9, 1);
         f.core.position.z = -2.15 - 0.45 * len * 0.9;
@@ -1187,13 +1289,77 @@
       const back = m.root.localToWorld(new V3(0, 0.5, -2.4));
       const right = new V3(Math.cos(this.heading), 0, -Math.sin(this.heading));
       const stage = this.stage, turbo = this.turbo;
-      this.trail.update(active, back, right, stage === 3 ? 1.0 : 0.7, (c, a, t) => {
-        if (stage === 3) c.setHSL((a * 4 + t * 1.5) % 1, 1, 0.55);
+      const ultCol = stage === 4 ? ULTS[this.def.ult].color : 0;
+      this.trail.update(active, back, right, stage >= 3 ? (stage === 4 ? 1.3 : 1.0) : 0.7, (c, a, t) => {
+        if (stage === 4) c.setHex(ultCol);
+        else if (stage === 3) c.setHSL((a * 4 + t * 1.5) % 1, 1, 0.55);
         else if (stage > 0) c.setHex(BOOST_COLORS[stage]);
         else if (turbo > 0) c.setHex(0xff8a20);
       }, race.time);
 
       if (m.root.position.distanceTo(camera.position) < 150) this.emitParticles(dt, col);
+    }
+
+    // Lv.4 visuals (and Flame Road's fire). Runs for every racer on every browser, so remote players see it too.
+    ultimateEffects(dt) {
+      const m = this.model, ult = this.stage === 4 ? this.def.ult : null;
+      // Shadow Veil: fade the whole racer out (less for your own, so you can still steer)
+      const veil = ult === 'veil';
+      if (veil !== this.veilShown) {
+        this.veilShown = veil;
+        m.root.traverse(o => {
+          if (o.isSprite) o.visible = !veil;   // name tag
+          if (!o.isMesh || !o.material) return;
+          for (const mt of Array.isArray(o.material) ? o.material : [o.material]) {
+            if (veil) { mt.userData.veil = { t: mt.transparent, o: mt.opacity, dw: mt.depthWrite }; mt.transparent = true; mt.depthWrite = false; }
+            else if (mt.userData.veil) { Object.assign(mt, { transparent: mt.userData.veil.t, opacity: mt.userData.veil.o, depthWrite: mt.userData.veil.dw }); delete mt.userData.veil; }
+            mt.needsUpdate = true;
+          }
+        });
+      }
+      if (veil) {
+        const a = (this.isPlayer ? 0.35 : 0.12) + Math.sin(race.time * 14) * 0.05;
+        m.root.traverse(o => { if (o.isMesh && o.material && o.material.userData.veil) o.material.opacity = o.material.userData.veil.o * a; });
+      }
+      if (ult === 'flame' || ult === 'ice') {   // drop a fire / ice patch behind the board every 0.12s
+        this.fireAcc += dt;
+        while (this.fireAcc > 0.12) { this.fireAcc -= 0.12; spawnFire(this, m.root.localToWorld(new V3(0, 0, -2.8)), ult === 'ice' ? 'ice' : 'fire'); }
+      }
+      const close = ult && m.root.position.distanceTo(camera.position) < 150;
+      if (close && ult === 'storm') {   // ring of wind streaks spinning around the racer
+        for (let k = 0; k < 6; k++) {
+          const a = race.time * 9 + k * Math.PI / 3, rr = 5 + Math.random() * 6;
+          const p = m.root.position.clone().add(new V3(Math.cos(a) * rr, 0.5 + Math.random() * 4, Math.sin(a) * rr));
+          race.particles.emit(1, { pos: p, vel: new V3(-Math.sin(a) * 18, 1, Math.cos(a) * 18), color: 0xe8fbff, life: 0.4, size: [0.8, 0.2], drag: 2 });
+        }
+      }
+      if (close && ult === 'lightning') {   // crackling sparks round the rider
+        race.particles.emit(3, { pos: m.root.position.clone().add(new V3(0, 1.8, 0)), spread: 10, color: c => c.setHSL(0.14, 1, 0.6 + Math.random() * 0.3),
+          life: 0.2, size: [0.6, 0.1], jitter: 3 });
+      }
+      if (close && ult === 'radiant') {   // golden sparkles drifting up
+        race.particles.emit(2, { pos: m.root.position.clone().add(new V3(0, 1.5, 0)), spread: 2, vel: new V3(0, 4, 0), color: 0xfff0a0,
+          life: 0.8, size: [0.7, 0.1], drag: 1, jitter: 4 });
+      }
+      if (close && ult === 'ice') {
+        race.particles.emit(2, { pos: m.root.localToWorld(new V3(0, 0.4, -2.4)), spread: 3, vel: new V3(0, 2, 0), color: 0xeaffff, life: 0.5, size: [0.6, 0.1], drag: 2 });
+      }
+      if (ult === 'glide' && m.root.position.distanceTo(camera.position) < 150) {
+        // two strands of leaves spiralling around the roll, left hanging in the air so they draw a corkscrew trail
+        const a = this.corkscrewAngle();
+        for (const off of [0, Math.PI]) {
+          const p = m.root.localToWorld(new V3(Math.cos(a + off) * 2.3, CORK_PIVOT + Math.sin(a + off) * 2.3, -0.8));
+          race.particles.emit(2, { pos: p, spread: 0.6, vel: new V3(0, 0, 0), color: c => c.setHSL(0.27 + Math.random() * 0.12, 0.95, 0.55),
+            life: 0.7, size: [0.9, 0.25], drag: 4, jitter: 0.4 });
+        }
+      }
+    }
+
+    // roll angle through Wind Glide: smooth start and finish, 3 turns in total
+    corkscrewAngle() {
+      const t = 1 - Math.max(0, this.stageTimer) / ULT_TIME;
+      const e = t * t * (3 - 2 * t);
+      return e * Math.PI * 2 * CORK_TURNS;
     }
 
     emitParticles(dt, flameCol) {
@@ -1205,7 +1371,7 @@
       const n = Math.floor(this.fxAcc); this.fxAcc -= n;
       if (n > 0) {
         const stage = this.stage;
-        const color = stage === 3 ? c => c.setHSL(Math.random(), 1, 0.6) : flameCol;
+        const color = stage === 3 ? c => c.setHSL(Math.random(), 1, 0.6) : flameCol;   // Lv.4: flameCol is the ultimate's colour
         for (const x of [-0.4, 0.4]) {
           const p = m.root.localToWorld(new V3(x, 0.5, -2.7));
           P.emit(Math.ceil(n / 2), { pos: p, vel: back.clone().multiplyScalar(8 + stage * 6).addScaledVector(f, this.speed * 0.85), spread: 2.5 + stage,
@@ -1307,6 +1473,44 @@
       age: 0, idx, lat: race.track.lateral(pos, idx), trail: new Trail(race.scene, 24) });
   }
 
+  // Lightning ultimate: a jagged bolt from src to tgt (or into the sky), shocking tgt on the browser that simulates it
+  function lightningStrike(src, tgt) {
+    const a = src.pos.clone().add(new V3(0, 3, 0));
+    const b = tgt ? tgt.pos.clone().add(new V3(0, 1.5, 0)) : a.clone().add(new V3(0, 30, 0));
+    const pts = [];
+    for (let i = 0; i <= 12; i++) {
+      const p = a.clone().lerp(b, i / 12);
+      if (i > 0 && i < 12) p.add(new V3(rand(-1.6, 1.6), rand(-1.2, 1.2), rand(-1.6, 1.6)));
+      pts.push(p);
+    }
+    const mat = new THREE.LineBasicMaterial({ color: 0xfff6a0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+    race.scene.add(line);
+    race.bolts.push({ line, t: 0 });
+    race.flash = 0.25;
+    if (tgt) {
+      spawnBurst(b, 0xffe14a, 4);
+      tgt.takeHit('shock');   // only acts on the target's own browser; a shield or Shadow Veil stops it
+    }
+    if (near(src) || (tgt && near(tgt))) audio.sfx('boom');
+  }
+
+  // Flame Road / Ice Road patch: a glowing disc on the road that lasts 3s
+  function spawnFire(owner, pos, kind) {
+    if (!race.fireGeo) {
+      race.fireGeo = new THREE.CircleGeometry(3.2, 20);
+      race.fireMat = PB.glow(0xff6a10, 0.75);
+      race.iceMat = PB.glow(0x8adfff, 0.55);
+    }
+    kind = kind || 'fire';
+    const idx = race.track.nearest(pos, owner.idx);
+    pos.y = race.track.heightAt(pos, idx) + 0.12;
+    const mesh = new THREE.Mesh(race.fireGeo, kind === 'ice' ? race.iceMat : race.fireMat);
+    mesh.rotation.x = -Math.PI / 2; mesh.position.copy(pos);
+    race.scene.add(mesh);
+    race.fires.push({ owner, pos, mesh, life: 3, kind });
+  }
+
   function spawnMine(owner, pos, pid) {
     const g = new THREE.Group();
     const crate = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.8, 1.8), PB.toon(0xd03a20));
@@ -1393,6 +1597,7 @@
       p.idx = track.nearest(p.pos, p.idx);
       const s = track.samples[(p.idx + 8) % N];
       let aim;
+      if (p.target && veiled(p.target)) p.target = null;   // lock lost: fly on down the track
       if (p.type === 'missile' && p.target && !p.target.finished && p.target.pos.distanceTo(p.pos) < 45) aim = p.target.pos;
       else {
         const lat = p.type === 'missile' && p.target ? clamp(track.lateral(p.target.pos, p.target.idx), -track.W, track.W) : p.lat;
@@ -1425,12 +1630,47 @@
       if (p.dead) { race.scene.remove(p.mesh); race.scene.remove(p.trail.mesh); PB.disposeTree(p.mesh); PB.disposeTree(p.trail.mesh); }
       return !p.dead;
     });
+    // Flame/Ice Road patches: flicker, then shrink away; affect grounded racers (not the owner) that this browser simulates
+    for (const f of race.fires) {
+      f.life -= dt;
+      const ice = f.kind === 'ice';
+      f.mesh.scale.setScalar(Math.min(1, f.life / 0.5) * (ice ? 1 : 0.9 + Math.sin(race.time * 20 + f.pos.x) * 0.1));
+      if (ice && f.mesh.position.distanceTo(camera.position) < 120 && Math.random() < 0.3) {
+        race.particles.emit(1, { pos: f.pos, spread: 1, vel: new V3(0, 2, 0), color: 0xeaffff, life: 0.6, size: [0.6, 0.1], drag: 1, jitter: 5 });
+      } else if (!ice && f.mesh.position.distanceTo(camera.position) < 120 && Math.random() < 0.5) {
+        race.particles.emit(1, { pos: f.pos, spread: 1.5, vel: new V3(0, 6, 0), color: c => c.setHSL(0.03 + Math.random() * 0.08, 1, 0.55),
+          life: 0.5, size: [1.6, 0.3], drag: 1, jitter: 4 });
+      }
+      for (const r of race.racers) {
+        if (!r.auth || r === f.owner || r.air) continue;
+        const dx = r.pos.x - f.pos.x, dz = r.pos.z - f.pos.z;
+        if (dx * dx + dz * dz < 3.2 * 3.2 && Math.abs(r.pos.y - f.pos.y) < 2) { if (ice) r.applyIce(); else r.applyBurn(); }
+      }
+      if (f.life <= 0) { f.dead = true; race.scene.remove(f.mesh); }
+    }
+    race.fires = race.fires.filter(f => !f.dead);
+    // Storm Wind shoves everyone close by; Mega Thruster knocks aside whoever it touches
+    for (const o of race.racers) {
+      if (o.stage !== 4 || (o.def.ult !== 'storm' && o.def.ult !== 'thruster')) continue;
+      for (const r of race.racers) {
+        if (r === o || !r.auth) continue;
+        const d = r.pos.distanceTo(o.pos);
+        if (o.def.ult === 'storm' && d < 12) r.knock(o, 2.2);
+        else if (o.def.ult === 'thruster' && d < 3.6) r.knock(o, 5);
+      }
+    }
+    for (const b of race.bolts) {
+      b.t += dt;
+      b.line.material.opacity = Math.max(0, 1 - b.t / 0.4) * (Math.random() < 0.3 ? 0.4 : 1);
+      if (b.t > 0.4) { b.dead = true; race.scene.remove(b.line); b.line.geometry.dispose(); b.line.material.dispose(); }
+    }
+    race.bolts = race.bolts.filter(b => !b.dead);
     // mines
     for (const m of race.mines) {
       m.immune -= dt; m.life -= dt;
       m.mesh.rotation.y += dt;
       for (const r of race.racers) {
-        if (!r.auth || (r === m.owner && m.immune > 0)) continue;
+        if (!r.auth || (r === m.owner && m.immune > 0) || veiled(r)) continue;
         if (r.pos.distanceTo(m.pos) < 2.8) {
           r.takeHit('spin'); m.dead = true; explode(m.pos.clone(), 5, 0xff5020);
           netEvent({ e: 'mine', pid: m.id });
@@ -1481,7 +1721,7 @@
     const scene = new THREE.Scene();
     const tdef = PB.TRACKS[state.trackIdx];
     const track = PB.buildTrack(tdef, scene);
-    race = { scene, track, racers: [], boxes: [], projectiles: [], mines: [], effects: [], time: 0, phase: 'countdown', cd: 4.2, stats: {},
+    race = { scene, track, racers: [], boxes: [], projectiles: [], mines: [], effects: [], fires: [], bolts: [], time: 0, phase: 'countdown', cd: 4.2, stats: {},
       shake: 0, flash: 0, paused: false, standingsT: 0, finishT: 0, camPos: null, camLook: null,
       online: !!grid && PB.net.connected(), pidSeq: 0, netT: 0 };
     race.particles = new PB.fx.Particles(scene, Q.particles);
@@ -1656,17 +1896,27 @@
     $('hud-gauge').style.width = (p.stage > 0 ? (p.stageTimer / p.stageDur) * 100 : p.gauge) + '%';
     panel.classList.toggle('ready', p.stage === 0 && p.gauge >= 100);
     // touch BOOST button says which boost a tap gives: full Lv.1->3, short Lv.1 only, or not yet
-    const bstate = p.stage > 0 ? 'on' : p.gauge >= 100 ? 'full' : p.gauge >= BOOST_MIN ? 'part' : 'low';
+    const bstate = p.stage > 0 ? 'on' : p.gauge >= 100 ? (p.def.ult && p.ult >= 100 ? 'full ult' : 'full') : p.gauge >= BOOST_MIN ? 'part' : 'low';
     if (bstate !== hudCache.bstate) {
       hudCache.bstate = bstate;
       const tb = document.querySelector('.t-boost');
       tb.className = 't-btn t-boost ' + bstate;
-      tb.innerHTML = { full: 'BOOST<small>Lv.1→3</small>', part: 'BOOST<small>Lv.1</small>', low: 'BOOST<small>ชาร์จ</small>', on: 'BOOST' }[bstate];
+      tb.innerHTML = { 'full ult': 'BOOST<small>Lv.1→4 ★</small>', full: 'BOOST<small>Lv.1→3</small>', part: 'BOOST<small>Lv.1</small>', low: 'BOOST<small>ชาร์จ</small>', on: 'BOOST' }[bstate];
     }
-    for (let i = 1; i <= 3; i++) panel.classList.toggle('lv' + i, p.stage === i);
+    for (let i = 1; i <= 4; i++) panel.classList.toggle('lv' + i, p.stage === i);
+    // ultimate meter (only for characters that have a Lv.4)
+    const ult = p.def.ult && ULTS[p.def.ult];
+    panel.classList.toggle('has-ult', !!ult);
+    if (ult) {
+      $('hud-ult').style.width = (p.stage === 4 ? (p.stageTimer / ULT_TIME) * 100 : p.ult) + '%';
+      $('hud-ult').style.background = '#' + new THREE.Color(ult.color).getHexString();
+      panel.classList.toggle('ult-ready', p.ult >= 100 && p.stage < 4);
+      setText('hud-ult-name', p.ult >= 100 && p.stage < 4 ? `★ ${ult.name} พร้อม` : `★ ${ult.name}`);
+    }
     panel.querySelectorAll('.boost-lv i').forEach(e => e.classList.toggle('on', +e.dataset.lv <= p.stage));
     if (p.stage > 0) {
-      setText('hud-boost-state', p.boostMax === 1 ? 'BOOST Lv.1' : p.stage < 3 ? `BOOST Lv.${p.stage} → Lv.${p.stage + 1}` : 'MAX BOOST!!');
+      setText('hud-boost-state', p.stage === 4 ? `★ ULTIMATE: ${ult.name}!` : p.boostMax === 1 ? 'BOOST Lv.1' : p.stage < 3 ? `BOOST Lv.${p.stage} → Lv.${p.stage + 1}`
+        : ult && p.ult >= 100 ? 'MAX BOOST!! → ★ Lv.4' : 'MAX BOOST!!');
       setText('hud-boost-count', String(Math.ceil(p.stageTimer)));
     } else {
       setText('hud-boost-state', p.gauge >= 100 ? (vin.touch ? 'พร้อมแล้ว! กด BOOST' : 'พร้อมแล้ว! กด SHIFT')
@@ -1761,17 +2011,18 @@
     const p = race.player, u = post.u;
     const target = clamp((Math.abs(p.speed) - 55) / 80, 0, 1) * 0.55 + p.stage * 0.15 + (p.turbo > 0 ? 0.2 : 0);
     u.uSpeed.value += (target - u.uSpeed.value) * Math.min(1, 5 * dt);
-    u.uChroma.value += ((p.stage === 3 ? 1 : p.stage === 2 ? 0.35 : 0) - u.uChroma.value) * Math.min(1, 5 * dt);
+    u.uChroma.value += ((p.stage >= 3 ? 1 : p.stage === 2 ? 0.35 : 0) - u.uChroma.value) * Math.min(1, 5 * dt);
     // Fast Blur only at MAX BOOST: snaps in quickly, fades out a little slower when the boost ends
-    const fast = p.stage === 3 ? 0.85 + Math.min(Math.abs(p.speed), 140) / 140 * 0.15 : 0;
+    const fast = p.stage >= 3 ? 0.85 + Math.min(Math.abs(p.speed), 140) / 140 * 0.15 : 0;
     u.uFast.value += (fast - u.uFast.value) * Math.min(1, (fast > u.uFast.value ? 6 : 3) * dt);
-    if (p.stage === 3) tintCol.setHSL((race.time * 0.8) % 1, 1, 0.55);
+    if (p.stage === 4) tintCol.setHex(ULTS[p.def.ult].color);
+    else if (p.stage === 3) tintCol.setHSL((race.time * 0.8) % 1, 1, 0.55);
     else if (p.stage > 0) tintCol.setHex(BOOST_COLORS[p.stage]);
     else if (p.turbo > 0) tintCol.setHex(0xff8a20);
     if (p.stage > 0 || p.turbo > 0) u.uTint.value.lerp(tintCol, Math.min(1, 10 * dt));
     const amt = p.stage > 0 ? 0.12 + p.stage * 0.07 : p.turbo > 0 ? 0.12 : 0;
     u.uTintAmt.value += (amt - u.uTintAmt.value) * Math.min(1, 6 * dt);
-    const lineCol = p.stage === 3 ? tintCol : p.stage > 0 ? BOOST_COLORS[p.stage] : 0xffffff;
+    const lineCol = p.stage >= 3 ? tintCol : p.stage > 0 ? BOOST_COLORS[p.stage] : 0xffffff;
     race.lines.update(dt, Math.max(p.speed, 0), clamp((Math.abs(p.speed) - 70) / 60, 0, 1) * 0.5 + p.stage * 0.15, lineCol);
   }
 

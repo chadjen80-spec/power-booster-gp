@@ -151,6 +151,20 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #070614; c
 .boost-panel.lv1 { border-color: var(--cyan); }
 .boost-panel.lv2 { border-color: var(--pink); }
 .boost-panel.lv3 { border-color: #fff; box-shadow: 0 0 20px rgba(255,255,255,0.6); }
+/* Lv.4 ultimate: 4th pip and meter only for characters that have one */
+.boost-lv .ult-pip { display: none; }
+.boost-panel.has-ult .boost-lv .ult-pip { display: inline-block; }
+.boost-lv i.on[data-lv="4"] { background: #fff; box-shadow: 0 0 12px #fff, 0 0 4px var(--gold); }
+.ult-row { display: none; align-items: center; gap: 8px; font-size: 12px; margin: -2px 0 4px; }
+.boost-panel.has-ult .ult-row { display: flex; }
+.ult-row span { white-space: nowrap; opacity: .9; }
+.ult-bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.ult-bar i { display: block; height: 100%; width: 0; }
+.boost-panel.ult-ready .ult-row span { color: var(--gold); text-shadow: 0 0 8px var(--gold); }
+.boost-panel.lv4 { border-color: var(--gold); box-shadow: 0 0 26px rgba(255,210,58,0.8); }
+.t-boost.ult { box-shadow: 0 0 26px #fff, 0 0 12px rgba(255,210,58,0.9); }
+.char-ult { font-size: 13px; color: var(--cyan); margin: -4px 0 6px; }
+.char-ult b { color: var(--gold); }
 
 #minimap { position: absolute; left: 18px; bottom: 16px; width: 200px; height: 200px; border-radius: 16px;
   background: rgba(5,5,25,0.55); border: 1px solid var(--line); }
