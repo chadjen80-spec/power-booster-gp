@@ -22,47 +22,67 @@
 
 <!-- ===== Title ===== -->
 <section id="scr-title" class="screen show">
-  <div class="logo">
-    <div class="logo-main">POWER<span>BOOSTER</span></div>
-    <div class="logo-sub">JET SURF GRAND PRIX</div>
+  <!-- top bar: logo on the left, coins + shop + rewards on the right -->
+  <header class="t-top">
+    <div class="logo">
+      <div class="logo-main">POWER<span>BOOSTER</span></div>
+      <div class="logo-sub">JET SURF GRAND PRIX</div>
+    </div>
+    <div class="t-wallet">
+      <div class="coin-badge"><span class="coin-ico">🪙</span><b data-coins>0</b></div>
+      <button class="btn gold" id="btn-shop">ร้านค้า 🛒</button>
+      <button class="btn gold" id="btn-pass">ภารกิจ & Pass 🎟️<i id="pass-dot" class="dot hidden"></i></button>
+    </div>
+  </header>
+
+  <!-- play modes, stacked on the left so the character stays in view on the right -->
+  <nav class="t-menu">
+    <div class="t-label">เลือกโหมด</div>
+    <button class="btn big" id="btn-start">▶ เล่นคนเดียว</button>
+    <button class="btn big alt" id="btn-online">🌐 เล่นออนไลน์</button>
+    <button class="btn big rank" id="btn-ranked">🏆 Ranked</button>
+    <button id="offer-banner" class="offer-banner hidden">🎁 <b>STARTER PACK</b> <span>สกินตำนาน เอซ + 🪙 1,000</span>
+      <em id="offer-price"></em> <small id="offer-time"></small></button>
+  </nav>
+
+  <!-- extras live behind two small buttons -->
+  <div class="t-corner">
+    <button class="btn ghost t-icon" id="btn-howto" data-pop="pop-howto">❓ วิธีเล่น</button>
+    <button class="btn ghost t-icon" id="btn-settings" data-pop="pop-settings">⚙ ตั้งค่า</button>
   </div>
-  <button id="offer-banner" class="offer-banner hidden">🎁 <b>STARTER PACK</b> <span>สกินตำนาน เอซ + 🪙 1,000</span>
-    <em id="offer-price"></em> <small id="offer-time"></small></button>
-  <div class="row center">
-    <button class="btn big" id="btn-start">เล่นคนเดียว ▶</button>
-    <button class="btn big alt" id="btn-online">เล่นออนไลน์ 🌐</button>
-    <button class="btn big rank" id="btn-ranked">Ranked 🏆</button>
+  <div class="t-pop panel hidden" id="pop-settings">
+    <h3>ตั้งค่า</h3>
+    <div class="diff-row quality-row">
+      <span>คุณภาพกราฟิก:</span>
+      <button class="chip" data-q="high">สูง</button>
+      <button class="chip" data-q="medium">กลาง</button>
+      <button class="chip" data-q="low">ต่ำ</button>
+    </div>
+    <div class="t-hint">เครื่องสเปคต่ำหรือมือถือ แนะนำ "ต่ำ"</div>
+    <div class="row">
+      <button class="btn ghost touch-only" id="btn-fullscreen">⛶ เต็มจอ</button>
+      <button class="btn ghost hidden" id="btn-install">📲 ติดตั้งเป็นแอป</button>
+    </div>
   </div>
-  <div class="row center">
-    <div class="coin-badge"><span class="coin-ico">🪙</span><b data-coins>0</b></div>
-    <button class="btn gold" id="btn-shop">ร้านค้า 🛒</button>
-    <button class="btn gold" id="btn-pass">ภารกิจ & Pass 🎟️<i id="pass-dot" class="dot hidden"></i></button>
-  </div>
-  <div class="diff-row quality-row">
-    <span>คุณภาพกราฟิก:</span>
-    <button class="chip" data-q="high">สูง</button>
-    <button class="chip" data-q="medium">กลาง</button>
-    <button class="chip" data-q="low">ต่ำ (เครื่องสเปคต่ำ)</button>
-  </div>
-  <div class="row center">
-    <button class="btn ghost touch-only" id="btn-fullscreen">⛶ เต็มจอ</button>
-    <button class="btn ghost hidden" id="btn-install">📲 ติดตั้งเป็นแอป</button>
-  </div>
-  <div class="controls-box touch-only">
-    <div><b>ลากนิ้วซ้าย</b> เลี้ยว</div>
-    <div><b>เร่ง</b> กดค้างเพื่อวิ่ง</div>
-    <div><b>BOOST</b> BOOSTER 3 จังหวะ</div>
-    <div><b>ดริฟต์</b> กดค้างตอนเลี้ยว (วิ่งไปด้วย)</div>
-    <div><b>ไอเทม</b> ใช้ไอเทม</div>
-  </div>
-  <div class="controls-box keys-only">
-    <div><b>W / ↑</b> เร่ง</div>
-    <div><b>S / ↓</b> เบรก / ถอย</div>
-    <div><b>A D / ← →</b> เลี้ยว</div>
-    <div><b>Space</b> ดริฟต์ (ปล่อยแล้วได้เทอร์โบ)</div>
-    <div><b>Shift / K</b> BOOSTER 3 จังหวะ</div>
-    <div><b>E / J</b> ใช้ไอเทม</div>
-    <div><b>Esc / P</b> หยุดเกม</div>
+  <div class="t-pop panel hidden" id="pop-howto">
+    <h3>วิธีเล่น</h3>
+    <div class="controls-box touch-only">
+      <div><b>ลากนิ้วซ้าย</b> เลี้ยว</div>
+      <div><b>เร่ง</b> กดค้างเพื่อวิ่ง</div>
+      <div><b>BOOST</b> BOOSTER 3 จังหวะ</div>
+      <div><b>ดริฟต์</b> กดค้างตอนเลี้ยว (วิ่งไปด้วย)</div>
+      <div><b>ไอเทม</b> ใช้ไอเทม</div>
+    </div>
+    <div class="controls-box keys-only">
+      <div><b>W / ↑</b> เร่ง</div>
+      <div><b>S / ↓</b> เบรก / ถอย</div>
+      <div><b>A D / ← →</b> เลี้ยว</div>
+      <div><b>Space</b> ดริฟต์ (ปล่อยแล้วได้เทอร์โบ)</div>
+      <div><b>Shift / K</b> BOOSTER 3 จังหวะ</div>
+      <div><b>E / J</b> ใช้ไอเทม</div>
+      <div><b>Esc / P</b> หยุดเกม</div>
+    </div>
+    <div class="t-hint">เกจเต็มแล้วผ่าน Lv.3 ได้โดยไม่โดนโจมตี + เกจท่าไม้ตายเต็ม = ★ ท่าไม้ตาย Lv.4</div>
   </div>
 </section>
 

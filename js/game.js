@@ -187,6 +187,17 @@
     else goScreen('lobby');
   });
   $('btn-tracks').addEventListener('click', () => goScreen('track'));
+  // title extras (How to play / Settings): small panels that open on demand and close on a tap elsewhere
+  const closePops = () => document.querySelectorAll('.t-pop').forEach(p => p.classList.add('hidden')) ||
+    document.querySelectorAll('[data-pop]').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('[data-pop]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const pop = $(b.dataset.pop), open = pop.classList.contains('hidden');
+    closePops();
+    if (open) { pop.classList.remove('hidden'); b.classList.add('on'); audio.sfx('select'); }
+  }));
+  document.querySelectorAll('.t-pop').forEach(p => p.addEventListener('click', e => e.stopPropagation()));
+  $('scr-title').addEventListener('click', closePops);
   // graphics quality: renderer settings are fixed at startup, so switching reloads the page (only offered on the title screen)
   document.querySelectorAll('[data-q]').forEach(b => {
     b.classList.toggle('sel', b.dataset.q === Q.level);
@@ -2053,9 +2064,10 @@
         PB.animateRider(menu.model, { dt, steer, drift: 0, stage: 0, speed: 60, time: menu.t });
       }
       const onRight = state.screen === 'char' || state.screen === 'shop';
+      const onLeft = state.screen === 'title';   // title menu sits on the left, so the racer stands on the right
       camera.fov = 45; camera.updateProjectionMatrix();
       camera.position.set(0, 3.2, 10.5);
-      camera.lookAt(onRight && window.innerWidth > 700 ? 3.2 : 0, 1.6, 0);
+      camera.lookAt(window.innerWidth > 560 ? (onRight ? 3.2 : onLeft ? -2.8 : 0) : 0, 1.6, 0);
       post.bloom.strength = 0.7; post.bloom.radius = 0.5; post.bloom.threshold = 0.75;
       post.u.uSat.value = 1.12; post.u.uContrast.value = 1.05;
       renderScene(menu.scene);
