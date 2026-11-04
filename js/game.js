@@ -72,6 +72,7 @@
   function stat(r, k) { if (r.isPlayer && race && race.stats) race.stats[k] = (race.stats[k] || 0) + 1; }
 
   function rollItem(place) {
+    if (race && race.bossMode) return Math.random() < 0.55 ? 'turbo' : 'shield';
     const t = ITEM_TABLE[place <= 2 ? 0 : place <= 5 ? 1 : 2];
     let sum = 0; for (const k in t) sum += t[k];
     let r = Math.random() * sum;
@@ -202,8 +203,10 @@
   document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => goScreen(b.dataset.go)));
   $('btn-start').addEventListener('click', () => { audio.init(); leaveOnline(); state.mode = 'solo'; goScreen('char'); });
   $('btn-online').addEventListener('click', () => { audio.init(); state.mode = 'online'; goScreen('char'); });
+  $('btn-boss').addEventListener('click', () => { audio.init(); leaveOnline(); state.mode = 'boss'; goScreen('char'); });
   $('btn-char-ok').addEventListener('click', () => {
     if (state.mode === 'solo') { goScreen('track'); return; }
+    if (state.mode === 'boss') { startRace(null, { boss: true }); return; }
     if (state.mode === 'ranked') { goScreen('ranked'); return; }
     if (PB.net.room) { PB.net.send({ t: 'setChar', char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin }); goScreen('lobby'); }
     else goScreen('online');
@@ -211,16 +214,17 @@
   $('btn-shop').addEventListener('click', () => { audio.init(); goScreen('shop'); });
   $('btn-race').addEventListener('click', () => startRace());
   $('btn-resume').addEventListener('click', () => togglePause(false));
-  $('btn-restart').addEventListener('click', () => startRace());
+  $('btn-restart').addEventListener('click', () => startRace(null, { boss: !!(race && race.bossMode) }));
   $('btn-quit').addEventListener('click', () => { leaveOnline(); goScreen('title'); });
   $('btn-again').addEventListener('click', () => {
     if (race && race.ranked) { leaveOnline(); goScreen('ranked'); return; }   // a ranked room is for one race
+    if (race && race.bossMode) { startRace(null, { boss: true }); return; }
     if (!race || !race.online) { startRace(); return; }
     if (PB.net.isHost()) PB.net.send({ t: 'end' });
     else goScreen('lobby');
   });
   $('btn-tracks').addEventListener('click', () => goScreen('track'));
-  $('btn-chars').addEventListener('click', () => { state.mode = 'solo'; goScreen('char'); });   // pick a racer, then a track
+  $('btn-chars').addEventListener('click', () => { state.mode = race && race.bossMode ? 'boss' : 'solo'; goScreen('char'); });   // pick a racer, then a track
   // title extras (How to play / Settings): small panels that open on demand and close on a tap elsewhere
   const closePops = () => document.querySelectorAll('.t-pop').forEach(p => p.classList.add('hidden')) ||
     document.querySelectorAll('[data-pop]').forEach(b => b.classList.remove('on'));
@@ -1051,7 +1055,15 @@
         }
       }
       // --- control source ---
-      if (this.isPlayer && !this.finished) {
+      if (this.isPlayer && race.bossMode && !this.finished) {
+        bossControl(this, dt, track);
+        if (canControl && !race.boss.over) {
+          if (hit('ShiftLeft', 'ShiftRight', 'KeyK')) {
+            if (!this.activateBooster() && this.stage === 0) bigMsg(`BOOSTER ${Math.floor(this.gauge)}% (ต้องมี ${BOOST_MIN}%)`, true);
+          }
+          if (hit('KeyE', 'KeyJ')) this.useItem();
+        }
+      } else if (this.isPlayer && !this.finished) {
         inp.brake = down('KeyS', 'ArrowDown') ? 1 : 0;
         // touch: hold GO to run; holding DRIFT runs too, so one thumb can drift without also holding GO
         inp.throttle = down('KeyW', 'ArrowUp') || (vin.touch && down('Space')) ? 1 : 0;
@@ -1276,13 +1288,13 @@
 
     onCrossLine() {
       this.lap++;
-      if (this.lap > LAPS && !this.finished) {
+      if (this.lap > race.laps && !this.finished) {
         this.finished = true;
         this.finishTime = race.time;
         if (this.isPlayer) onPlayerFinish();
       } else if (this.isPlayer && this.lap >= 2) {
         audio.sfx('lap');
-        bigMsg(this.lap === LAPS ? 'FINAL LAP!' : `LAP ${this.lap}`, true);
+        bigMsg(this.lap === race.laps ? 'FINAL LAP!' : `LAP ${this.lap}`, true);
       }
     }
 
@@ -1851,7 +1863,8 @@
 
   // ---------------- race lifecycle ----------------
   // grid: optional online starting grid from the server [{id, name, char, bot}], front row first
-  function startRace(grid) {
+  function startRace(grid, opts) {
+    opts = opts || {};
     audio.init();
     endRace();
     show(null);
@@ -1859,11 +1872,12 @@
     $('hud').classList.remove('hidden');
     state.screen = 'race';
     const scene = new THREE.Scene();
-    const tdef = PB.TRACKS[state.trackIdx];
+    const tdef = opts.boss ? PB.BOSS_TRACK : PB.TRACKS[state.trackIdx];
     const track = PB.buildTrack(tdef, scene);
     race = { scene, track, racers: [], boxes: [], projectiles: [], mines: [], effects: [], fires: [], bolts: [], time: 0, phase: 'countdown', cd: 4.2, stats: {},
       shake: 0, flash: 0, paused: false, standingsT: 0, finishT: 0, camPos: null, camLook: null,
-      online: !!grid && PB.net.connected(), pidSeq: 0, netT: 0, start: { state: 'wait' } };
+      online: !!grid && PB.net.connected(), pidSeq: 0, netT: 0, start: { state: 'wait' }, laps: opts.boss ? 1 : LAPS, bossMode: !!opts.boss };
+    document.body.classList.toggle('boss-mode', !!opts.boss);
     race.particles = new PB.fx.Particles(scene, Q.particles);
     scene.add(camera);                       // speed lines ride on the camera
     race.lines = new PB.fx.SpeedLines(camera, Q.speedLines);
@@ -1872,6 +1886,9 @@
     post.u.uSat.value = th.grade.sat; post.u.uContrast.value = th.grade.contrast;
 
     // grid: 4 rows x 2. Solo: 7 random bots and the player starts at the back
+    if (!grid && opts.boss) {   // boss stage: just you (and the fish)
+      grid = [{ id: 'me', char: PB.CHARACTERS[state.charIdx].id, skin: PB.shop.skin, bot: false, local: true }];
+    }
     if (!grid) {
       const others = PB.CHARACTERS.filter((c, i) => i !== state.charIdx).sort(() => Math.random() - 0.5).slice(0, 7);
       grid = others.map((c, i) => ({ id: 'bot' + i, char: c.id, skin: PB.shop.botSkin(), bot: true }));
@@ -1882,7 +1899,7 @@
       const def = PB.shop.dress(PB.CHARACTERS.find(c => c.id === g.char) || PB.CHARACTERS[0], g.skin);
       const row = Math.floor(i / 2), col = i % 2;
       const idx = track.N - 4 - row * 5;
-      const lat = (col ? -1 : 1) * track.W * 0.4 + (row % 2 ? 1.5 : -1.5);
+      const lat = opts.boss ? 0 : (col ? -1 : 1) * track.W * 0.4 + (row % 2 ? 1.5 : -1.5);
       const mine = g.id === myId;
       const r = new Racer(def, mine, track, idx, lat, scene, state.diff,
         { ctrl: mine ? 'local' : g.bot ? 'bot' : 'remote', netId: g.id, name: (g.tier ? g.tier + ' ' : '') + (g.name || def.name) });
@@ -1891,6 +1908,7 @@
     });
     race.player = race.racers.find(r => r.isPlayer);
     race.player.gauge = 50;
+    if (opts.boss) setupBoss();
 
     // item boxes
     const mat = itemBoxMaterial();
@@ -1912,11 +1930,12 @@
     buildStandingsList();
     audio.startEngine();
     snapCamera();
-    bigMsg('', false);
+    if (opts.boss) bigMsg('หนีให้ถึง GOAL!', true); else bigMsg('', false);
   }
 
   function endRace() {
     if (!race) return;
+    document.body.classList.remove('boss-mode');
     audio.stopEngine();
     race.lines.dispose();
     race.scene.remove(camera);
@@ -1936,6 +1955,8 @@
   }
 
   function onPlayerFinish() {
+    if (race.bossMode && race.boss.over) return;
+    if (race.bossMode) { audio.sfx('finish'); bigMsg('GOAL! 🏁', true); race.phase = 'finished'; race.finishT = 3; return; }
     audio.sfx('finish');
     const p = race.player;
     p.place = race.racers.filter(r => r.finished).length;
@@ -1948,6 +1969,7 @@
   function showResults() {
     race.phase = 'done';
     const p = race.player;
+    if (race.bossMode) { showBossResults(); return; }
     $('res-title').textContent = p.place === 1 ? '🏆 ชนะเลิศ! 🏆' : `จบอันดับที่ ${p.place}`;
     renderResults();
     const online = race.online;
@@ -1973,6 +1995,204 @@
 
   function sortedRacers() {
     return race.racers.slice().sort((a, b) => b.progressTotal() - a.progressTotal());
+  }
+
+
+  // ---------------- Boss Stage: escape the giant electric arowana ----------------
+  // You auto-run along the road and only dodge left/right; the camera looks back at the chase.
+  // Bubbles slow you down (and let it gain on you); touching an electric baby fish, or getting caught, is Game Over.
+  const BOSS_SCALE = 1.9, BOSS_START_GAP = 40, BOSS_LANE_SPEED = 26;
+  const BOSS_BITE = 7.6 * BOSS_SCALE + 1, BOSS_MOUTH = 7.4 * BOSS_SCALE / 2.5;   // nose reach (units) and mouth ahead of centre (samples)
+  const BOSS_DIFF = [
+    { speed: 0.82, bubble: [3.4, 4.8], volley: 1, fish: [5.5, 8], warn: 1.45 },
+    { speed: 0.87, bubble: [2.8, 4.2], volley: 2, fish: [4.5, 6.8], warn: 1.25 },
+    { speed: 0.93, bubble: [2.2, 3.4], volley: 3, fish: [3.4, 5.2], warn: 1.05 },
+  ];
+  // a point on the road at fractional sample `prog` (unwrapped) and lateral offset `lat`
+  function roadAt(prog, lat) {
+    const tr = race.track, N = tr.N, i0 = Math.floor(prog), f = prog - i0;
+    const a = tr.samples[((i0 % N) + N) % N], b = tr.samples[(((i0 + 1) % N) + N) % N];
+    return { pos: a.p.clone().lerp(b.p, f).addScaledVector(a.n, lat), s: a };
+  }
+  function setupBoss() {
+    const m = PB.buildArowana();
+    m.root.scale.setScalar(BOSS_SCALE);
+    race.scene.add(m.root);
+    const p = race.player;
+    race.boss = { m, prog: p.progress - BOSS_START_GAP / 2.5, lat: 0, speed: 0, t: 0, wake: 1.5, nextBubble: 3.5, nextFish: 6, arcT: 0,
+      bubbles: [], fish: [], warns: [], over: null, startProg: p.progress };
+    race.boss.nextFish = 8;   // a few seconds to get used to dodging bubbles first
+    race.bossLane = 0;
+    placeBoss(0);
+  }
+  function placeBoss(dt) {
+    const B = race.boss, r = roadAt(B.prog, B.lat + Math.sin(B.t * 1.2) * 4);   // weaves across the road as it swims
+    B.t += dt;
+    const effort = clamp(B.speed / 120, 0, 1);
+    B.m.root.position.copy(r.pos).add(new V3(0, 2.2 * BOSS_SCALE + Math.sin(B.t * 1.6) * 0.6, 0));
+    B.m.root.rotation.set(Math.sin(B.t * 1.1) * 0.05, Math.atan2(r.s.flat.x, r.s.flat.z) + Math.cos(B.t * 1.2) * 0.3, Math.sin(B.t * 1.3) * 0.06);
+    PB.animateArowana(B.m, B.t, effort);
+  }
+  function bossControl(r, dt, track) {
+    const inp = r.input;
+    const want = vin.steer !== null ? vin.steer : (down('KeyA', 'ArrowLeft') ? 1 : 0) - (down('KeyD', 'ArrowRight') ? 1 : 0);
+    // the camera faces back at the rider, so screen-left is the rider's right (negative lateral)
+    if (canControlNow() && !race.boss.over) race.bossLane = clamp(race.bossLane - want * BOSS_LANE_SPEED * dt, -track.W + 3, track.W - 3);
+    const look = 8 + Math.floor(Math.abs(r.speed) * 0.1);
+    const s = track.samples[(r.idx + look) % track.N];
+    const tx = s.p.x + s.n.x * race.bossLane, tz = s.p.z + s.n.z * race.bossLane;
+    const diff = wrapAngle(Math.atan2(tx - r.pos.x, tz - r.pos.z) - r.moveHeading);
+    inp.steer = clamp(diff * 3 + wrapAngle(r.moveHeading - r.heading) * 1.5, -1, 1);
+    inp.throttle = race.boss.over ? 0 : 1; inp.brake = 0; inp.drift = false;
+  }
+  function canControlNow() { return race.phase !== 'countdown'; }
+  function bossGameOver(reason) {
+    const B = race.boss;
+    if (B.over || race.phase !== 'race') return;
+    B.over = reason;
+    const p = race.player;
+    p.speed *= 0.2; p.spin = Math.max(p.spin, 1.2);
+    const at = p.pos.clone().add(new V3(0, 1.5, 0));
+    if (reason === 'fish') { for (let k = 0; k < 3; k++) makeBolt(at.clone().add(new V3(rand(-6, 6), 30, rand(-6, 6))), at, { core: 0.25, glow: 0.9, jitter: 2.4, life: 0.6 }); spawnBurst(at, 0x9ae8ff, 5); }
+    else { explode(at, 5, 0x40ffd0); }
+    audio.sfx('boom'); race.shake = 0.9; race.flash = 0.5;
+    bigMsg(reason === 'fish' ? '⚡ โดนลูกปลาไฟฟ้า!' : '🐟 ถูกจับได้!', true);
+    race.phase = 'finished'; race.finishT = 2.8;
+  }
+  // a glowing strip on the road showing the lane an electric fish is about to charge down
+  function warnStripe(lat, fromProg, toProg) {
+    const tr = race.track, pos = [], idx = [];
+    const a = Math.floor(fromProg), b = Math.ceil(toProg);
+    for (let i = a, k = 0; i <= b; i += 2, k++) {
+      const r1 = roadAt(i, lat - 1.6), r2 = roadAt(i, lat + 1.6);
+      pos.push(r1.pos.x, r1.pos.y + 0.12, r1.pos.z, r2.pos.x, r2.pos.y + 0.12, r2.pos.z);
+      if (i > a) { const v = (k - 1) * 2; idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2); }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    race.scene.add(m);
+    return m;
+  }
+  function updateBoss(dt) {
+    const B = race.boss, p = race.player, tr = race.track, D = BOSS_DIFF[state.diff] || BOSS_DIFF[1];
+    const plat = tr.lateral(p.pos, p.idx);
+    const gap = (p.progress - B.prog) * 2.5;
+    const running = race.phase === 'race' && !B.over;
+    // chase: a bit slower than your normal top speed, but it closes in fast if you fall far behind
+    if (race.phase === 'countdown') B.speed = 0;
+    else if (B.wake > 0) { B.wake -= dt; B.speed = 0; if (B.wake <= 0) { bigMsg('⚡ ปลาตะพัดยักษ์ไล่มาแล้ว!', true); audio.sfx('boom'); race.shake = 0.5; } }
+    else if (B.over || race.phase !== 'race') B.speed += (Math.abs(p.speed) * 0.6 - B.speed) * Math.min(1, 2 * dt);
+    else B.speed = p.maxSpeed * D.speed + Math.max(0, gap - 50) * 1.4;
+    B.prog += B.speed * dt / 2.5;
+    if (B.over) B.prog = Math.min(B.prog, p.progress - (BOSS_BITE + 3) / 2.5);   // after the catch it looms right behind you, not through you
+    B.lat += clamp(plat - B.lat, -7 * dt, 7 * dt);
+    placeBoss(dt);
+    if (running && B.wake <= 0 && gap < BOSS_BITE) bossGameOver('caught');
+
+    // crackling arcs round the boss
+    B.arcT -= dt;
+    if (B.arcT <= 0 && B.m.root.position.distanceTo(camera.position) < 140) {
+      B.arcT = 0.12 + Math.random() * 0.2;
+      const c = B.m.root.position, j = () => new V3(rand(-3, 3), rand(-2.5, 2.5), rand(-9, 9)).multiplyScalar(BOSS_SCALE);
+      makeBolt(c.clone().add(j()), c.clone().add(j()), { core: 0.08, glow: 0.35, jitter: 1, segs: 6, forks: 1, life: 0.15 });
+    }
+
+    // bubble volleys aimed at your lane
+    if (running && B.wake <= 0) B.nextBubble -= dt;
+    if (B.nextBubble <= 0) {
+      B.nextBubble = rand(D.bubble[0], D.bubble[1]);
+      const n = 1 + Math.floor(Math.random() * D.volley);
+      for (let k = 0; k < n; k++) {
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(1.3, 16, 12), new THREE.MeshStandardMaterial({ color: 0xbff4ff, transparent: true, opacity: 0.45, roughness: 0.05, metalness: 0.3, emissive: 0x2a8aa0, emissiveIntensity: 0.5 }));
+        race.scene.add(mesh);
+        B.bubbles.push({ mesh, prog: B.prog + BOSS_MOUTH, lat: B.lat, tlat: clamp(plat + (k ? rand(-5, 5) : rand(-1.5, 1.5)), -tr.W + 2, tr.W - 2),
+          speed: B.speed + 30 + k * 4, t: 0 });
+      }
+      audio.sfx('fire');
+    }
+    for (const b of B.bubbles) {
+      b.t += dt; b.prog += b.speed * dt / 2.5; b.lat += (b.tlat - b.lat) * Math.min(1, 1.4 * dt);
+      const r = roadAt(b.prog, b.lat + Math.sin(b.t * 4) * 0.4);
+      b.mesh.position.copy(r.pos).add(new V3(0, 1.6 + Math.sin(b.t * 3) * 0.3, 0));
+      b.mesh.scale.set(1 + Math.sin(b.t * 7) * 0.06, 1 - Math.sin(b.t * 7) * 0.06, 1);
+      const dp = (b.prog - p.progress) * 2.5;
+      if (running && Math.abs(dp) < 2.6 && Math.abs(b.lat - plat) < 2.6 && p.respawnT <= 0) {
+        b.dead = true;
+        spawnBurst(b.mesh.position.clone(), 0xdffaff, 2.5);
+        if (p.shield > 0) { p.shield = 0; spawnBurst(p.pos.clone().add(new V3(0, 1.6, 0)), 0x44ccff, 3.5); p.hurtCharge(SHIELD_CHARGE); audio.sfx('shield'); }
+        else { p.spin = Math.max(p.spin, 0.45); p.speed *= 0.6; if (p.stage > 0 && p.stage < 4) p.stage = 0; p.hurtCharge(10); audio.sfx('hit'); race.shake = 0.5; bigMsg('โดนฟอง!', true); }
+      }
+      if (dp > 30 || b.t > 6) { b.dead = true; spawnBurst(b.mesh.position.clone(), 0xdffaff, 1.5); }
+    }
+    B.bubbles = B.bubbles.filter(b => { if (b.dead) { race.scene.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.material.dispose(); } return !b.dead; });
+
+    // electric baby fish: a red lane warning first, then a fish charges down it
+    if (running && B.wake <= 0) B.nextFish -= dt;
+    if (B.nextFish <= 0) {
+      B.nextFish = rand(D.fish[0], D.fish[1]);
+      const lat = Math.random() < 0.5 ? clamp(plat, -tr.W + 3, tr.W - 3) : rand(-tr.W + 3, tr.W - 3);
+      B.warns.push({ lat, t: D.warn, mesh: warnStripe(lat, B.prog, p.progress + 30) });
+      audio.sfx('tick');
+    }
+    for (const w of B.warns) {
+      w.t -= dt;
+      w.mesh.material.opacity = (Math.floor(w.t * 10) % 2 ? 0.75 : 0.25);
+      if (w.t <= 0 || !running) {
+        w.dead = true;
+        if (running) {
+          const f = PB.buildElectricFish(); race.scene.add(f.root);
+          B.fish.push({ f, prog: B.prog + BOSS_MOUTH, lat: w.lat, speed: B.speed + 78, t: 0 });
+          audio.sfx('turbo');
+        }
+      }
+    }
+    B.warns = B.warns.filter(w => { if (w.dead) { race.scene.remove(w.mesh); w.mesh.geometry.dispose(); w.mesh.material.dispose(); } return !w.dead; });
+    for (const fsh of B.fish) {
+      fsh.t += dt; fsh.prog += fsh.speed * dt / 2.5;
+      const r = roadAt(fsh.prog, fsh.lat);
+      fsh.f.root.position.copy(r.pos).add(new V3(0, 1.4 + Math.sin(fsh.t * 10) * 0.15, 0));
+      fsh.f.root.rotation.y = Math.atan2(r.s.flat.x, r.s.flat.z);
+      fsh.f.tailFin.rotation.y = Math.sin(fsh.t * 30) * 0.5;
+      fsh.f.halo.material.opacity = 0.2 + Math.random() * 0.3;
+      if (Math.random() < 0.25 && fsh.f.root.position.distanceTo(camera.position) < 90) {
+        const c = fsh.f.root.position; makeBolt(c.clone().add(new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1))), c.clone().add(new V3(rand(-1.5, 1.5), rand(-1, 1), rand(-1.5, 1.5))), { core: 0.05, glow: 0.2, jitter: 0.4, segs: 4, forks: 0, life: 0.1 });
+      }
+      const dp = (fsh.prog - p.progress) * 2.5;
+      if (running && Math.abs(dp) < 2.4 && Math.abs(fsh.lat - plat) < 2.1 && p.respawnT <= 0) bossGameOver('fish');
+      if (dp > 60) fsh.dead = true;
+    }
+    B.fish = B.fish.filter(fsh => { if (fsh.dead) { race.scene.remove(fsh.f.root); PB.disposeTree(fsh.f.root); } return !fsh.dead; });
+  }
+  function updateBossHUD() {
+    const B = race.boss, p = race.player, N = race.track.N;
+    // START is where you begin, GOAL is the line one lap on (progress N)
+    const bf = clamp((B.prog - B.startProg) / (N - B.startProg), 0, 1);
+    const pf = clamp((p.progress - B.startProg) / (N - B.startProg), 0, 1);
+    $('boss-me').style.left = (pf * 100) + '%';
+    $('boss-fish').style.left = (bf * 100) + '%';
+    const gap = Math.max(0, Math.round((p.progress - B.prog) * 2.5 - BOSS_BITE));   // distance to its nose
+    setText('boss-gap', B.wake > 0 ? 'เตรียมตัว...' : `ระยะห่าง ${gap} m`);
+    $('boss-hud').classList.toggle('danger', B.wake <= 0 && gap < 15);
+  }
+  function showBossResults() {
+    const p = race.player, B = race.boss, won = !B.over;
+    const N = race.track.N, frac = clamp((p.progress - B.startProg) / (N - B.startProg), 0, 1);
+    $('res-title').textContent = won ? '🏁 หนีรอดสำเร็จ!' : '💀 GAME OVER';
+    $('res-body').innerHTML = `<tr class="me"><td>${won ? '🏁' : '💀'}</td><td>${esc(p.name)} (คุณ)</td>` +
+      `<td>${won ? fmtTime(p.finishTime) : `ไปได้ ${Math.round(frac * 100)}%`}</td></tr>`;
+    if (won) {
+      const coins = PB.shop.reward(1, state.diff, false);
+      $('res-coins').innerHTML = `ได้รับ <b>🪙 +${coins}</b> <span>รวม 🪙 ${PB.shop.coins.toLocaleString()}</span>`;
+    } else {
+      $('res-coins').innerHTML = `<span>${B.over === 'fish' ? 'โดนลูกปลาไฟฟ้าช็อต' : 'ปลาตะพัดยักษ์ไล่ทัน'} — หลบให้ดีแล้วลองใหม่!</span>`;
+    }
+    $('res-pass').innerHTML = '';
+    $('btn-again').textContent = won ? 'เล่นอีกครั้ง' : 'ลองอีกครั้ง';
+    $('btn-tracks').classList.add('hidden');
+    $('btn-chars').classList.remove('hidden');
+    renderRankedResult();
+    $('scr-results').classList.add('show');
+    audio.stopEngine();
   }
 
   // ---------------- HUD ----------------
@@ -2006,9 +2226,10 @@
   }
   function updateHUD(dt) {
     const p = race.player;
+    if (race.bossMode) updateBossHUD();
     setText('hud-pos', String(p.place));
     setText('hud-pos-suf', suffix(p.place));
-    setText('hud-lap', String(clamp(p.lap, 1, LAPS)));
+    setText('hud-lap', String(clamp(p.lap, 1, race.laps)));
     setText('hud-time', fmtTime(race.time));
     setText('hud-speed', String(Math.round(Math.abs(p.speed) * 3.6)));
 
@@ -2101,6 +2322,11 @@
   function camTargets() {
     const p = race.player;
     const f = new V3(Math.sin(race.camYaw), 0, Math.cos(race.camYaw));
+    if (race.bossMode) {
+      const pos = p.pos.clone().addScaledVector(f, 9.5).add(new V3(0, 6.2, 0));
+      const look = p.pos.clone().addScaledVector(f, -14).add(new V3(0, 1.2, 0));
+      return { pos, look };
+    }
     const pos = p.pos.clone().addScaledVector(f, -race.camDist).add(new V3(0, 5.2 + p.stage * 0.3, 0));
     const look = p.pos.clone().addScaledVector(f, 8).add(new V3(0, 2.0, 0));
     return { pos, look };
@@ -2239,6 +2465,7 @@
 
     for (const r of race.racers) r.update(dt, race.track, canControl);
     sortedRacers().forEach((r, i) => { r.place = i + 1; });
+    if (race.bossMode) updateBoss(dt);
     updateWorldObjects(dt);
     race.particles.update(dt);
 

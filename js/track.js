@@ -26,6 +26,11 @@
         [-270,10,-400],[-370,8,-330],[-360,6,-220],[-250,4,-170],[-300,2,-70],[-260,0,30],[-120,0,40]] },
   ];
 
+  // Boss Stage course (one lap from START to GOAL): a sunken temple road on the sea floor. Kept out of PB.TRACKS.
+  PB.BOSS_TRACK = { id: 'abyss', name: 'Abyss Run', th: 'ทางหนีใต้ทะเลลึก', desc: 'หนีปลาตะพัดยักษ์ไฟฟ้า', theme: 'abyss', width: 20, scale: 1.6,
+    pts: [[0, 0, 0], [220, 2, 10], [400, 6, -40], [520, 8, -160], [540, 6, -320], [460, 2, -460], [300, 0, -520], [120, 4, -480],
+      [-60, 8, -520], [-240, 6, -480], [-360, 2, -360], [-380, 0, -200], [-300, 0, -80], [-160, 0, -20]] };
+
   // Ramps, gaps and holes, placed by lap fraction (kept clear of item boxes at .1/.35/.6/.85 and boost pads at .27/.52/.76).
   // jump: ramp across the road, then a gap of `gap` units (0 = just air time). hole: round pit at lateral `lat` (fraction of width).
   const FEATURES = {
@@ -34,6 +39,7 @@
     volcano: [{ type: 'jump', at: 0.065, gap: 24 }, { type: 'jump', at: 0.425, gap: 22 }, { type: 'jump', at: 0.57, gap: 0 }, { type: 'jump', at: 0.722, gap: 26 }],
     sky: [{ type: 'jump', at: 0.118, gap: 26 }, { type: 'jump', at: 0.36, gap: 26 }, { type: 'jump', at: 0.44, gap: 0 }, { type: 'jump', at: 0.69, gap: 24 },
       { type: 'jump', at: 0.79, gap: 0 }, { type: 'jump', at: 0.93, gap: 22 }],
+    abyss: [],
     snow: [{ type: 'jump', at: 0.055, gap: 0 }, { type: 'jump', at: 0.335, gap: 20 }, { type: 'jump', at: 0.44, gap: 22 }, { type: 'jump', at: 0.71, gap: 20 }, { type: 'jump', at: 0.93, gap: 0 }],
   };
   const RAMP_LEN = 4, RAMP_H = 2;   // ramp length in samples (2.5u each) and lip height
@@ -72,6 +78,12 @@
       wall: { base: '#cfe4f4', trim: '#6adcff', light: 0x6adcff }, lamp: { pole: 0x8aa0c0, head: 0x9ae8ff },
       tunnel: { at: 0.39, len: 60, shell: '#9ac8e8', ring: 0x6adcff },
       hole: ['#0a1a40', '#1a4a8a', '#6adcff'] },
+    abyss: { fog: 0x0b4f62, fogNear: 95, fogFar: 560, hemi: [0x8fe4ff, 0x0a2a30, 0.85], sun: [0xbff4ff, 0.6],
+      dome: { top: 0x021c28, horizon: 0x0b4f62, bottom: 0x02141c, sunDir: [0.15, 1, 0.1], sunColor: 0x9fefff, sunSize: 30 },
+      bloom: [0.7, 0.55, 0.78], grade: { sat: 1.15, contrast: 1.06 },
+      road: { base: '#55686c', edge: '#7fffe0', curbA: '#ffb84a', curbB: '#24363c', dash: '#9fffe8', glow: 0.55, pattern: 'marble' }, rail: 0x40ffd0, ground: -0.6,
+      wall: { base: '#2a4a50', trim: '#ffb84a', light: 0x40ffd0 }, lamp: { pole: 0x2a4a50, head: 0x7fffe0 },
+      tunnel: { at: 0.48, len: 50, shell: '#2a4a50', ring: 0x40ffd0, open: true } },
   };
   // hole look per theme: [center, middle, rim] (default: dark pit)
   const HOLE_DEFAULT = ['#000000', '#100820', '#3a2a5a'];
@@ -834,6 +846,24 @@
         k.box(2.8, 0.8, 2.8, gold, 0, h + 0.4, 0, o);
       }
     },
+    abyss(o, k) {   // broken temple columns furred with weed, or a giant clam
+      const stone = KITS._stone || (KITS._stone = new THREE.MeshLambertMaterial({ color: 0x5a7a78 }));
+      const weed = KITS._weed || (KITS._weed = new THREE.MeshLambertMaterial({ color: 0x2f8f5a }));
+      if (Math.random() < 0.65) {
+        for (let n = 0, c = 1 + Math.floor(Math.random() * 3); n < c; n++) {
+          const h = rand(6, 22), x = rand(-6, 6), z = rand(-4, 2);
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, h, 10), stone); col.position.set(x, h / 2, z); col.rotation.z = rand(-0.12, 0.12); col.castShadow = true; o.add(col);
+          const cap = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.9, 3.2), stone); cap.position.set(x, h + 0.4, z); cap.rotation.y = rand(0, 1); o.add(cap);
+          const moss = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.4, h * 0.3, 10), weed); moss.position.set(x, h * 0.15, z); o.add(moss);
+        }
+      } else {
+        const shellMat = new THREE.MeshStandardMaterial({ color: 0xe8b8c8, roughness: 0.4 });
+        const r = rand(2.5, 4);
+        const bot = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), shellMat); bot.position.y = r * 0.6; o.add(bot);
+        const top = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), shellMat); top.position.set(0, r * 0.6, -r * 0.3); top.rotation.x = -0.6; o.add(top);
+        const pearl = new THREE.Mesh(new THREE.SphereGeometry(r * 0.3, 14, 10), new THREE.MeshBasicMaterial({ color: 0xeafcff })); pearl.position.y = r * 0.75; o.add(pearl);
+      }
+    },
     snow(o, k) {   // log cabins with snowy roofs, or clusters of ice spires
       if (Math.random() < 0.55) {
         const wood = new THREE.MeshLambertMaterial({ color: 0x7a4e2e }), snow = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -1041,6 +1071,71 @@
           new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.45, fog: false, depthWrite: false }));
         arc.position.set(-150, -40, -1300); group.add(arc);
       });
+    },
+
+    abyss(group, samples, N, W, spot) {
+      const sand = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshLambertMaterial({ color: 0x2a5a58 }));
+      sand.rotation.x = -Math.PI / 2; sand.position.y = -0.6; sand.receiveShadow = true; group.add(sand);
+      // kelp forests: tall swaying-looking stalks in clumps
+      const kelpMats = [PB.toon(0x2f8f4a), PB.toon(0x4aa83a), PB.toon(0x2a7a5a)];
+      for (let k = 0; k < D(110); k++) {
+        const sp = spot(6, 120); if (!sp) continue;
+        const g = new THREE.Group(); g.position.set(sp.x, -0.6, sp.z);
+        for (let n = 0, c = 2 + Math.floor(Math.random() * 3); n < c; n++) {
+          const h = rand(10, 30), st = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.5, h, 5), kelpMats[(Math.random() * 3) | 0]);
+          st.position.set(rand(-2, 2), h / 2, rand(-2, 2)); st.rotation.set(rand(-0.15, 0.15), 0, rand(-0.15, 0.15)); g.add(st);
+          for (let l = 0; l < 4; l++) {
+            const leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), st.material);
+            leaf.scale.set(0.25, 1.6, 0.8); leaf.position.set(st.position.x + rand(-0.4, 0.4), h * (0.3 + l * 0.17), st.position.z); leaf.rotation.z = rand(-0.6, 0.6); g.add(leaf);
+          }
+        }
+        group.add(g);
+      }
+      // coral clusters in bright colours
+      const coralCols = [0xff6a8a, 0xffa040, 0xb070ff, 0xff4a6a, 0xffd25a];
+      for (let k = 0; k < D(80); k++) {
+        const sp = spot(4, 70); if (!sp) continue;
+        const g = new THREE.Group(); g.position.set(sp.x, -0.6, sp.z);
+        const m = PB.toon(coralCols[(Math.random() * coralCols.length) | 0]);
+        for (let n = 0; n < 5; n++) {
+          const h = rand(1.5, 4.5), b = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, h, 6), m);
+          b.position.set(rand(-1.2, 1.2), h / 2, rand(-1.2, 1.2)); b.rotation.set(rand(-0.5, 0.5), 0, rand(-0.5, 0.5)); g.add(b);
+          const tip = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), m); tip.position.set(b.position.x, h, b.position.z); g.add(tip);
+        }
+        group.add(g);
+      }
+      // rocks
+      const rockMat = PB.toon(0x3a5a5c);
+      for (let k = 0; k < D(50); k++) {
+        const sp = spot(5, 60); if (!sp) continue;
+        const r = new THREE.Mesh(new THREE.DodecahedronGeometry(rand(1.5, 4.5)), rockMat);
+        r.position.set(sp.x, -0.8, sp.z); r.rotation.set(rand(0, 3), rand(0, 3), 0); group.add(r);
+      }
+      // shafts of light coming down from the surface
+      const rayMat = new THREE.MeshBasicMaterial({ color: 0xbff4ff, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      for (let k = 0; k < D(26); k++) {
+        const s = samples[Math.floor(Math.random() * N)];
+        const off = (Math.random() < 0.5 ? -1 : 1) * rand(10, 60);
+        const ray = new THREE.Mesh(new THREE.ConeGeometry(rand(5, 11), 140, 12, 1, true), rayMat);
+        ray.position.set(s.p.x + s.n.x * off, 60, s.p.z + s.n.z * off); ray.rotation.z = rand(-0.2, 0.2);
+        ray.userData.overRoad = true;   // light, not a solid thing
+        group.add(ray);
+      }
+      // rising bubbles and drifting specks around the camera
+      const n = D(900), pos = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { pos[i * 3] = rand(-120, 120); pos[i * 3 + 1] = rand(-5, 60); pos[i * 3 + 2] = rand(-120, 120); }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const motes = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcffaff, size: 0.6, transparent: true, opacity: 0.7, depthWrite: false }));
+      motes.frustumCulled = false; group.add(motes);
+      group.userData.tick = (dt, t, center) => {
+        motes.position.set(center.x, center.y, center.z);
+        for (let i = 0; i < n; i++) {
+          pos[i * 3 + 1] += dt * (2 + (i % 4));
+          pos[i * 3] += Math.sin(t * 0.8 + i) * dt * 0.8;
+          if (pos[i * 3 + 1] > 60) pos[i * 3 + 1] -= 65;
+        }
+        g.attributes.position.needsUpdate = true;
+      };
     },
 
     snow(group, samples, N, W, spot, th, nearTrack) {

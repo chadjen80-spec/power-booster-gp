@@ -41,6 +41,7 @@
     <button class="btn big" id="btn-start">▶ เล่นคนเดียว</button>
     <button class="btn big alt" id="btn-online">🌐 เล่นออนไลน์</button>
     <button class="btn big rank" id="btn-ranked">🏆 Ranked</button>
+    <button class="btn big boss" id="btn-boss">🐟 ด่านบอส</button>
     <button id="offer-banner" class="offer-banner hidden">🎁 <b>STARTER PACK</b> <span>สกินตำนาน เอซ + 🪙 1,000</span>
       <em id="offer-price"></em> <small id="offer-time"></small></button>
   </nav>
@@ -305,6 +306,11 @@
     </div>
   </div>
   <canvas id="minimap" width="200" height="200"></canvas>
+  <!-- boss stage: START -> GOAL progress with you and the fish, and how close it is -->
+  <div id="boss-hud">
+    <div class="boss-track"><span class="b-start">START</span><div class="b-line"><i id="boss-fish">🐟</i><i id="boss-me">🏄</i></div><span class="b-goal">GOAL</span></div>
+    <div class="boss-gap" id="boss-gap"></div>
+  </div>
   <div id="big-msg"></div>
   <div id="wrong-way" class="hidden">⟲ WRONG WAY</div>
   <!-- touch controls (phones / tablets) -->
@@ -366,6 +372,7 @@
 <script src="js/audio.js"></script>
 <script src="js/net.js"></script>
 <script src="js/chibi.js"></script>
+<script src="js/boss.js"></script>
 <script src="js/shop.js"></script>
 <script src="js/pass.js"></script>
 <script src="js/account.js"></script>

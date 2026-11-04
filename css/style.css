@@ -513,3 +513,22 @@ body.touch .hud-tl { left: calc(14px + env(safe-area-inset-left)); }
 #scr-title, #scr-char, #scr-shop { cursor: grab; touch-action: none; }
 #scr-title.turning, #scr-char.turning, #scr-shop.turning { cursor: grabbing; }
 #scr-title .panel, #scr-char .panel, #scr-shop .panel, .t-top, .t-menu, .t-corner, .t-pop { cursor: auto; touch-action: auto; }
+
+/* ---------- Boss Stage ---------- */
+.btn.big.boss { background: linear-gradient(90deg, #1fb8a0, #3a6aff); color: #fff; }
+#boss-hud { display: none; position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(620px, 70vw); pointer-events: none; text-align: center; }
+body.boss-mode #boss-hud { display: block; }
+body.boss-mode .hud-tl .pos, body.boss-mode .hud-tl .lap, body.boss-mode #hud-standings, body.boss-mode #minimap { display: none; }
+.boss-track { display: flex; align-items: center; gap: 10px; font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 13px; }
+.boss-track .b-start { color: #ff7a5a; } .boss-track .b-goal { color: #ffd23a; }
+.b-line { position: relative; flex: 1; height: 10px; border-radius: 6px; background: linear-gradient(90deg, rgba(255,255,255,.15), rgba(127,255,224,.55)); box-shadow: 0 0 10px rgba(64,255,208,.4); }
+.b-line i { position: absolute; top: 50%; transform: translate(-50%, -50%); font-style: normal; font-size: 22px; transition: left .1s linear; filter: drop-shadow(0 0 4px #000); }
+#boss-fish { font-size: 26px; filter: drop-shadow(0 0 6px #6af0ff); }
+.boss-gap { margin-top: 6px; font-weight: 700; font-size: 15px; color: #bff4ff; text-shadow: 0 0 6px #000; }
+#boss-hud.danger .boss-gap { color: #ff5a4a; animation: bossDanger .4s steps(2) infinite; }
+@keyframes bossDanger { 50% { opacity: .35; } }
+body.touch #boss-hud { bottom: auto; top: 10px; width: min(480px, 54vw); }
+
+/* boss stage auto-runs: no gas, brake or drift buttons */
+body.boss-mode .t-gas, body.boss-mode .t-brake, body.boss-mode .t-drift { display: none !important; }
+body.touch .boss-gap { text-align: left; padding-left: 4px; }   /* clear of the item slot in the top centre */
