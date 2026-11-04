@@ -121,7 +121,7 @@
   };
 
   // ---------------- menu showroom ----------------
-  const menu = { scene: new THREE.Scene(), model: null, t: 0 };
+  const menu = { scene: new THREE.Scene(), model: null, t: 0, yaw: 0.45, spin: 0, drag: null };   // yaw: showroom turntable angle, spin: its fling speed
   (function buildShowroom() {
     const s = menu.scene;
     const c = document.createElement('canvas'); c.width = 2; c.height = 256;
@@ -136,6 +136,34 @@
     const ring = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.08, 8, 64), new THREE.MeshBasicMaterial({ color: 0x22f0ff }));
     ring.rotation.x = Math.PI / 2; ring.position.y = -0.28; s.add(ring);
     const grid = new THREE.GridHelper(200, 50, 0xff3ad0, 0x2a1a5a); grid.position.y = -0.9; s.add(grid);
+  })();
+  // showroom turntable: drag (mouse or finger) anywhere off the panels to turn the racer 360 degrees, flick to spin it
+  (function showroomDrag() {
+    const ui = '.panel, button, a, input, select, .t-top, .t-menu, .t-corner, .t-pop, .char-grid';
+    let lastX = 0, lastT = 0;
+    ['scr-title', 'scr-char', 'scr-shop'].forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('pointerdown', e => {
+        if (e.button > 0 || e.target.closest(ui)) return;
+        menu.drag = e.pointerId; lastX = e.clientX; lastT = performance.now(); menu.spin = 0;
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* still get moves while over the screen */ }
+        el.classList.add('turning');
+      });
+      el.addEventListener('pointermove', e => {
+        if (e.pointerId !== menu.drag) return;
+        const now = performance.now(), d = (e.clientX - lastX) * 0.012;
+        menu.yaw += d;
+        menu.spin = d / Math.max(0.008, (now - lastT) / 1000) * 0.5 + menu.spin * 0.5;   // smoothed fling speed (rad/s)
+        lastX = e.clientX; lastT = now;
+      });
+      const end = e => {
+        if (e.pointerId !== menu.drag) return;
+        menu.drag = null; el.classList.remove('turning');
+        if (performance.now() - lastT > 80) menu.spin = 0;   // held still before letting go: no fling
+      };
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+    });
   })();
   function setMenuModel(def) {
     if (menu.model) { menu.scene.remove(menu.model.root); PB.disposeTree(menu.model.root); }
@@ -2118,7 +2146,8 @@
       // menu showroom
       menu.t += dt;
       if (menu.model) {
-        menu.model.root.rotation.y = menu.t * 0.6;
+        if (menu.drag == null) { menu.yaw += menu.spin * dt; menu.spin *= Math.exp(-2.5 * dt); }   // fling coasts to a stop
+        menu.model.root.rotation.y = menu.yaw;
         menu.model.root.position.y = 0.3 + Math.sin(menu.t * 2) * 0.15;
         menu.model.flames.forEach(f => {
           const l = 0.6 + Math.random() * 0.2; f.outer.scale.set(1, l, 1); f.outer.position.z = -2.15 - 0.7 * l;
@@ -2134,7 +2163,7 @@
       camera.fov = 45; camera.updateProjectionMatrix();
       camera.position.set(0, 3.2, 10.5);
       camera.lookAt(window.innerWidth > 560 ? (onRight ? 3.2 : onLeft ? -2.8 : 0) : 0, 1.6, 0);
-      post.bloom.strength = 0.7; post.bloom.radius = 0.5; post.bloom.threshold = 0.86;
+      post.bloom.strength = 0.6; post.bloom.radius = 0.5; post.bloom.threshold = 0.93;
       post.u.uSat.value = 1.12; post.u.uContrast.value = 1.05;
       renderScene(menu.scene);
       pressed.clear();

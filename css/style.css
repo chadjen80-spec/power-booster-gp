@@ -505,3 +505,8 @@ body.touch .hud-tl { left: calc(14px + env(safe-area-inset-left)); }
 .ps-login.hidden { display: none; }
 .ps-login input { flex: 1 1 200px; font-family: inherit; font-size: 15px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line);
   background: rgba(255,255,255,0.06); color: var(--txt); }
+
+/* showroom turntable: drag the racer round on the title, character and shop screens */
+#scr-title, #scr-char, #scr-shop { cursor: grab; touch-action: none; }
+#scr-title.turning, #scr-char.turning, #scr-shop.turning { cursor: grabbing; }
+#scr-title .panel, #scr-char .panel, #scr-shop .panel, .t-top, .t-menu, .t-corner, .t-pop { cursor: auto; touch-action: auto; }
