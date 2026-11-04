@@ -185,12 +185,11 @@
     for (const s of [-1, 1]) { const e = mesh(sphere(1, 12, 10), skinM, s * 0.88, -0.05, 0.02, head); e.scale.set(0.1, 0.17, 0.12); }
 
     // hair: cap tilted back so the big eyes stay clear, plus a rounded back volume
-    // big puffy hair: a cap over the top, a rounded back volume and side puffs, all a little larger than the skull
+    // big puffy hair: a cap over the top and a rounded back volume, a little larger than the skull
     const cap = mesh(new THREE.SphereGeometry(HEAD_R + 0.1, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.62), hairM, 0, 0.04, -0.03, head);
     cap.rotation.x = -1.0;   // tilted well back: the fringe (BANGS), not the cap, sets each racer's hairline
     const backVol = mesh(sphere(1, 28, 18), hairM, 0, -0.06, -0.2, head);
     backVol.scale.set(1.04, 0.98, 0.9);
-    for (const s of [-1, 1]) { const p = mesh(sphere(1, 18, 14), hairM, s * 0.78, 0.0, -0.12, head); p.scale.set(0.34, 0.62, 0.62); }
     // bangs: a smooth fringe shell over the forehead (edge at polar angle `edge`), plus locks along its edge.
     // Each racer has its own cut (def.bangs): see BANGS.
     hairM.side = THREE.DoubleSide;
@@ -328,7 +327,7 @@
     const torso = mesh(capsule(0.25, 0.2), shirtM, 0, 1.16, 0, body);
     torso.scale.set(1, 1, 0.82);
     if (def.skirt) mesh(ruffle(0.24, 0.33, 0.14, 10, 0.12), shirtM, 0, 1.22, 0, body);   // frilled top
-    mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.16, 10), skinM, 0, 1.5, 0, body);   // neck
+    mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.36, 12), skinM, 0, 1.6, 0, body);   // neck, long enough to show under the chin
     mesh(new THREE.TorusGeometry(0.13, 0.04, 8, 16), accM, 0, 1.42, 0, body).rotation.x = Math.PI / 2;   // collar
     // arms out for balance
     const arms = [];
@@ -351,7 +350,7 @@
     }
     const head = buildHead(def);
     head.name = 'Head';
-    head.position.y = 2.16;
+    head.position.y = 2.3;
     head.scale.set(0.8, 0.76, 0.77);   // head-space is built at radius 0.9; this makes it ~0.7
     body.add(head);
     return { rider, legs, upper, head, arms };
@@ -530,7 +529,7 @@
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8888aa, 0.9));
     const dl = new THREE.DirectionalLight(0xffffff, 0.7); dl.position.set(2, 4, 5); scene.add(dl);
     const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-    cam.position.set(0.4, 3.45, 4.6); cam.lookAt(0, 2.68, 0);
+    cam.position.set(0.4, 3.55, 4.6); cam.lookAt(0, 2.8, 0);
     const out = {};
     for (const def of PB.CHARACTERS) {
       const m = PB.buildRacerModel(def);
