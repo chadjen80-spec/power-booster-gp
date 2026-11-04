@@ -1283,6 +1283,7 @@
       if (m.shield.visible) m.shield.material.opacity = 0.2 + Math.sin(race.time * 10) * 0.06;
       // shock flicker
       m.rider.visible = !(this.shock > 0 && Math.floor(race.time * 20) % 2 === 0);
+      if (this.shock > 0) crackle(this);
       this.ultimateEffects(dt);
 
       // flames: size and color by state
@@ -1452,7 +1453,12 @@
     } else if (ev.it === 'turbo') {
       r.turbo = 1.8; if (r.isPlayer) audio.sfx('turbo');
     } else if (ev.it === 'emp') {
-      race.racers.forEach(q => { if (q !== r && q.progressTotal() > r.progressTotal()) q.takeHit('shock'); });
+      race.racers.forEach(q => {
+        if (q === r || q.progressTotal() <= r.progressTotal()) return;
+        if (!veiled(q)) empStrike(q);   // everyone sees the bolt; the hit itself lands on q's own browser
+        q.takeHit('shock');
+      });
+      race.flash = Math.max(race.flash, 0.3);
       audio.sfx('boom');
       if (!r.isPlayer) bigMsg(`⚡ ${r.name} ใช้ EMP!`, true);
     }
@@ -1494,25 +1500,74 @@
   }
 
   // Lightning ultimate: a jagged bolt from src to tgt (or into the sky), shocking tgt on the browser that simulates it
+  // A jagged lightning bolt from a to b: a hot core inside a soft glow, with a few side forks. Fades out over `life` seconds.
+  const BOLT_GEO = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true), UP = new V3(0, 1, 0);
+  function makeBolt(a, b, o) {
+    o = Object.assign({ core: 0.18, glow: 0.7, jitter: 1.6, segs: 12, forks: 3, color: 0xfff6a0, glowColor: 0x8ad8ff, life: 0.4 }, o);
+    const g = new THREE.Group();
+    const core = new THREE.MeshBasicMaterial({ color: o.color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const halo = new THREE.MeshBasicMaterial({ color: o.glowColor, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const seg = (p, q, k) => {   // one straight piece, as a core rod plus a fatter glow rod
+      const d = q.clone().sub(p), len = d.length(); if (len < 0.01) return;
+      const rot = new THREE.Quaternion().setFromUnitVectors(UP, d.divideScalar(len));
+      for (const [mat, r] of [[core, o.core * k], [halo, o.glow * k]]) {
+        const m = new THREE.Mesh(BOLT_GEO, mat);
+        m.position.copy(p).lerp(q, 0.5); m.quaternion.copy(rot); m.scale.set(r, len, r);
+        g.add(m);
+      }
+    };
+    const path = (p0, p1, n, jit, k) => {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        const p = p0.clone().lerp(p1, i / n);
+        if (i > 0 && i < n) p.add(new V3(rand(-jit, jit), rand(-jit, jit) * 0.6, rand(-jit, jit)));
+        pts.push(p);
+      }
+      for (let i = 0; i < n; i++) seg(pts[i], pts[i + 1], k);
+      return pts;
+    };
+    const main = path(a, b, o.segs, o.jitter, 1);
+    for (let f = 0; f < o.forks; f++) {   // side forks branching off the main channel
+      const from = main[1 + Math.floor(Math.random() * (o.segs - 2))];
+      const to = from.clone().add(new V3(rand(-1, 1), rand(-1, -0.3), rand(-1, 1)).multiplyScalar(a.distanceTo(b) * rand(0.12, 0.25)));
+      path(from, to, 4, o.jitter * 0.6, 0.55);
+    }
+    race.scene.add(g);
+    race.bolts.push({ obj: g, mats: [core, halo], t: 0, life: o.life });
+    return g;
+  }
+
   function lightningStrike(src, tgt) {
     const a = src.pos.clone().add(new V3(0, 3, 0));
     const b = tgt ? tgt.pos.clone().add(new V3(0, 1.5, 0)) : a.clone().add(new V3(0, 30, 0));
-    const pts = [];
-    for (let i = 0; i <= 12; i++) {
-      const p = a.clone().lerp(b, i / 12);
-      if (i > 0 && i < 12) p.add(new V3(rand(-1.6, 1.6), rand(-1.2, 1.2), rand(-1.6, 1.6)));
-      pts.push(p);
-    }
-    const mat = new THREE.LineBasicMaterial({ color: 0xfff6a0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
-    race.scene.add(line);
-    race.bolts.push({ line, t: 0 });
+    makeBolt(a, b, { forks: 2 });
     race.flash = 0.25;
     if (tgt) {
       spawnBurst(b, 0xffe14a, 4);
       tgt.takeHit('shock');   // only acts on the target's own browser; a shield or Shadow Veil stops it
     }
     if (near(src) || (tgt && near(tgt))) audio.sfx('boom');
+  }
+
+  // EMP: a bolt from the sky onto the racer, a flash of sparks, and the rider keeps crackling while shocked (see crackle())
+  function empStrike(q) {
+    const top = q.pos.clone().add(new V3(rand(-6, 6), 45, rand(-6, 6))), hitPt = q.pos.clone().add(new V3(0, 1.4, 0));
+    makeBolt(top, hitPt, { core: 0.22, glow: 0.8, jitter: 2.4, segs: 14, forks: 4, life: 0.5, glowColor: 0x4a9aff });
+    makeBolt(top, hitPt, { core: 0.12, glow: 0.5, jitter: 3, segs: 14, forks: 1, life: 0.3 });   // a second, fainter channel
+    spawnBurst(hitPt, 0x5ab8ff, 2.2);
+    if (q.pos.distanceTo(camera.position) < 150) {
+      race.particles.emit(26, { pos: hitPt, spread: 2, vel: new V3(0, 6, 0), color: c => c.setHSL(0.15 + Math.random() * 0.4, 1, 0.75),
+        life: 0.5, size: [0.7, 0.1], drag: 2, jitter: 14 });
+    }
+  }
+  // small arcs and sparks around a shocked rider
+  function crackle(q) {
+    if (q.pos.distanceTo(camera.position) > 120 || Math.random() > 0.35) return;
+    const c = q.pos.clone().add(new V3(0, 1.4, 0));
+    const a = c.clone().add(new V3(rand(-1.4, 1.4), rand(-1, 1.2), rand(-1.4, 1.4)));
+    const b = c.clone().add(new V3(rand(-1.4, 1.4), rand(-1, 1.2), rand(-1.4, 1.4)));
+    makeBolt(a, b, { core: 0.07, glow: 0.25, jitter: 0.5, segs: 4, forks: 0, life: 0.12 });
+    race.particles.emit(2, { pos: c, spread: 1.6, vel: new V3(0, 2, 0), color: 0xbfefff, life: 0.25, size: [0.4, 0.05], drag: 2, jitter: 6 });
   }
 
   // Flame Road / Ice Road patch: a glowing disc on the road that lasts 3s
@@ -1681,8 +1736,9 @@
     }
     for (const b of race.bolts) {
       b.t += dt;
-      b.line.material.opacity = Math.max(0, 1 - b.t / 0.4) * (Math.random() < 0.3 ? 0.4 : 1);
-      if (b.t > 0.4) { b.dead = true; race.scene.remove(b.line); b.line.geometry.dispose(); b.line.material.dispose(); }
+      const f = Math.max(0, 1 - b.t / b.life) * (Math.random() < 0.3 ? 0.35 : 1);   // fade with a flicker
+      b.mats[0].opacity = f; b.mats[1].opacity = f * 0.45;
+      if (b.t > b.life) { b.dead = true; race.scene.remove(b.obj); b.mats.forEach(m => m.dispose()); }
     }
     race.bolts = race.bolts.filter(b => !b.dead);
     // mines
