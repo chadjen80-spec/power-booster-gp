@@ -820,8 +820,15 @@
   };
 
   // ---------- theme scenery ----------
+  // A big backdrop piece (mountain, volcano, island) of base radius r: start at distance d from (cx, cz) in direction a,
+  // then slide outward until the whole base is clear of the road, so long tracks never run through it.
+  function clearSpot(nearTrack, W, cx, cz, a, d, r) {
+    for (let k = 0; k < 40 && nearTrack(cx + Math.cos(a) * d, cz + Math.sin(a) * d, r + W + 40); k++) d += 40;
+    return [cx + Math.cos(a) * d, cz + Math.sin(a) * d];
+  }
+
   const buildScenery = {
-    cove(group, samples, N, W, spot) {
+    cove(group, samples, N, W, spot, th, nearTrack) {
       const water = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000),
         PB.fx.makeWaterMaterial({ deep: 0x0a5a8a, shallow: 0x2ad0dc, sky: 0xcdeeff, sunDir: [0.35, 0.55, -0.75] }));
       water.rotation.x = -Math.PI / 2; water.position.y = -3;
@@ -877,7 +884,7 @@
       for (let k = 0; k < 14; k++) {
         const a = (k / 14) * Math.PI * 2, d = rand(750, 1000);
         // rounded jungle hill on a sand base, half sunk into the sea
-        const r = rand(80, 160), x = Math.cos(a) * d - 100, z = Math.sin(a) * d - 250;
+        const r = rand(80, 160), [x, z] = clearSpot(nearTrack, W, -100, -250, a, d, r);
         const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), PB.toon(0x4cae3a));
         hill.scale.set(r, rand(50, 120), r * rand(0.7, 1)); hill.position.set(x, -6, z); hill.rotation.y = a;
         group.add(hill);
@@ -922,7 +929,7 @@
       }
     },
 
-    volcano(group, samples, N, W, spot) {
+    volcano(group, samples, N, W, spot, th, nearTrack) {
       const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshLambertMaterial({ color: 0x3a2018 }));
       ground.rotation.x = -Math.PI / 2; ground.position.y = -0.6; group.add(ground);
       const lavaMat = PB.fx.makeLavaMaterial();
@@ -946,7 +953,8 @@
         const a = (k / 6) * Math.PI * 2 + 0.3, d = rand(650, 850);
         const h = rand(180, 280), r = rand(160, 230);
         const v = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.18, r, h, 14), vMat);
-        v.position.set(Math.cos(a) * d - 50, h / 2 - 1, Math.sin(a) * d - 250); group.add(v);
+        const [vx, vz] = clearSpot(nearTrack, W, -50, -250, a, d, r);
+        v.position.set(vx, h / 2 - 1, vz); group.add(v);
         const top = new THREE.Mesh(new THREE.CircleGeometry(r * 0.17, 14), lavaMat);
         top.rotation.x = -Math.PI / 2; top.position.set(v.position.x, h - 0.5, v.position.z); group.add(top);
       }
@@ -1001,7 +1009,7 @@
       });
     },
 
-    snow(group, samples, N, W, spot) {
+    snow(group, samples, N, W, spot, th, nearTrack) {
       const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshLambertMaterial({ color: 0xeef4ff }));
       ground.rotation.x = -Math.PI / 2; ground.position.y = -0.6; ground.receiveShadow = true; group.add(ground);
       // snowy pines
@@ -1036,7 +1044,7 @@
       const rockMat = PB.toon(0x6a7488);
       for (let k = 0; k < 12; k++) {
         const a = (k / 12) * Math.PI * 2, d = rand(800, 1050), r = rand(160, 260), h = rand(220, 380);
-        const x = Math.cos(a) * d - 60, z = Math.sin(a) * d - 120;
+        const [x, z] = clearSpot(nearTrack, W, -60, -120, a, d, r);
         const base = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), rockMat); base.position.set(x, h / 2 - 1, z); group.add(base);
         const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.45, h * 0.45, 7), snowMat); cap.position.set(x, h * 0.775, z); group.add(cap);
       }
