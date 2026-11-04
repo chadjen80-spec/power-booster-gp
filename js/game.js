@@ -1443,7 +1443,7 @@
       spawnProjectile('missile', r, pos.addScaledVector(f, 3).add(new V3(0, 1.3, 0)), Math.max(ev.s + 55, 115), target, ev.pid, ev.h);
       if (loud) audio.sfx('fire');
     } else if (ev.it === 'bomb') {
-      spawnProjectile('bomb', r, pos.addScaledVector(f, 3).add(new V3(0, 1.5, 0)), Math.max(ev.s + 40, 90), null, ev.pid, ev.h);
+      spawnProjectile('bomb', r, pos.addScaledVector(f, 3).add(new V3(0, 1.5, 0)), Math.max(ev.s + 80, 160), null, ev.pid, ev.h);   // well ahead of even a boosting thrower
       if (loud) audio.sfx('fire');
     } else if (ev.it === 'mine') {
       spawnMine(r, pos.addScaledVector(f, -3.5), ev.pid);
@@ -1553,7 +1553,7 @@
     if (p.dead) return;
     p.dead = true;
     explode(p.pos.clone(), p.type === 'bomb' ? 9 : 4);
-    if (p.type === 'bomb') race.racers.forEach(r => { if (r.pos.distanceTo(p.pos) < 9) r.takeHit('spin'); });
+    if (p.type === 'bomb') race.racers.forEach(r => { if (r !== p.owner && r.pos.distanceTo(p.pos) < 9) r.takeHit('spin'); });   // the thrower is spared
   }
 
   function explode(pos, radius, color) {
@@ -1631,13 +1631,13 @@
       p.pos.y += (gy - p.pos.y) * Math.min(1, 15 * dt);
       p.mesh.position.copy(p.pos);
       p.mesh.rotation.y = p.heading;
-      if (p.type === 'bomb') { p.mesh.rotation.x += dt * 8; p.speed = Math.max(40, p.speed - 25 * dt); }
+      if (p.type === 'bomb') { p.mesh.rotation.x += dt * 12; p.speed = Math.max(130, p.speed - 10 * dt); }
       const back = p.pos.clone().add(new V3(-Math.sin(p.heading) * 1.6, 0, -Math.cos(p.heading) * 1.6));
       p.trail.update(true, back, new V3(Math.cos(p.heading), 0, -Math.sin(p.heading)), 0.35, c => c.setHex(0xff9a40), race.time);
       // collisions: only against racers this browser simulates; it then tells everyone where the shot blew up
       if (p.life <= 0 || Math.abs(track.lateral(p.pos, p.idx)) > track.W + 1) { detonate(p); continue; }
       for (const r of race.racers) {
-        if (!r.auth || (r === p.owner && p.age < 0.6)) continue;
+        if (!r.auth || r === p.owner) continue;   // your own shots never hit you
         if (r.pos.distanceTo(p.pos) < (p.type === 'missile' ? 3 : 4.2)) {
           if (p.type === 'missile') r.takeHit('spin');
           detonate(p);
