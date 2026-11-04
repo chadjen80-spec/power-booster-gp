@@ -364,11 +364,17 @@
     if (def.skirt) mesh(ruffle(0.24, 0.33, 0.14, 10, 0.12), shirtM, 0, 1.22, 0, body);   // frilled top
     mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.28, 12), skinM, 0, 1.54, 0, body);   // neck, long enough to show under the chin
     mesh(new THREE.TorusGeometry(0.13, 0.04, 8, 16), accM, 0, 1.42, 0, body).rotation.x = Math.PI / 2;   // collar
+    // shoulders: rounded deltoids that carry the torso out to the arms, so the arms grow from the body instead of being stuck on
+    for (const s of [-1, 1]) {
+      const d = mesh(sphere(1, 16, 12), shirtM, s * 0.22, 1.33, 0, body);
+      d.scale.set(0.17, 0.13, 0.15);
+    }
     // arms out for balance
     const arms = [];
     for (const s of [-1, 1]) {
-      const sh = new THREE.Group(); sh.name = s < 0 ? 'ArmR' : 'ArmL'; sh.position.set(s * 0.27, 1.36, 0); sh.rotation.z = s * 1.05; body.add(sh);
-      mesh(capsule(0.09, 0.14), shirtM, 0, -0.1, 0, sh);   // sleeve
+      const sh = new THREE.Group(); sh.name = s < 0 ? 'ArmR' : 'ArmL'; sh.position.set(s * 0.31, 1.34, 0); sh.rotation.z = s * 1.05; body.add(sh);
+      mesh(sphere(0.105, 14, 10), shirtM, 0, 0, 0, sh);   // shoulder joint: round, so it looks right at any arm angle
+      mesh(capsule(0.095, 0.14), shirtM, 0, -0.12, 0, sh);   // sleeve
       mesh(capsule(0.07, 0.2), skinM, 0, -0.3, 0, sh);
       const hand = mesh(sphere(0.09, 12, 10), skinM, 0, -0.48, 0, sh); hand.scale.set(1, 1.15, 0.85);
       arms.push(sh);
