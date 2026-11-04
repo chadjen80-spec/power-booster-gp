@@ -2002,6 +2002,7 @@
   // You auto-run along the road and only dodge left/right; the camera looks back at the chase.
   // Bubbles slow you down (and let it gain on you); touching an electric baby fish, or getting caught, is Game Over.
   const BOSS_SCALE = 1.9, BOSS_START_GAP = 40, BOSS_LANE_SPEED = 26;
+  const FISH_SCALE = 2.2, FISH_HALF = 2.9;   // electric baby fish size, and half the width of its deadly lane
   const BOSS_BITE = 7.6 * BOSS_SCALE + 1, BOSS_MOUTH = 7.4 * BOSS_SCALE / 2.5;   // nose reach (units) and mouth ahead of centre (samples)
   const BOSS_DIFF = [
     { speed: 0.82, bubble: [3.4, 4.8], volley: 1, fish: [5.5, 8], warn: 1.45 },
@@ -2064,7 +2065,7 @@
     const tr = race.track, pos = [], idx = [];
     const a = Math.floor(fromProg), b = Math.ceil(toProg);
     for (let i = a, k = 0; i <= b; i += 2, k++) {
-      const r1 = roadAt(i, lat - 1.6), r2 = roadAt(i, lat + 1.6);
+      const r1 = roadAt(i, lat - FISH_HALF), r2 = roadAt(i, lat + FISH_HALF);
       pos.push(r1.pos.x, r1.pos.y + 0.12, r1.pos.z, r2.pos.x, r2.pos.y + 0.12, r2.pos.z);
       if (i > a) { const v = (k - 1) * 2; idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2); }
     }
@@ -2132,7 +2133,7 @@
       B.nextFish = rand(D.fish[0], D.fish[1]);
       const lat = Math.random() < 0.5 ? clamp(plat, -tr.W + 3, tr.W - 3) : rand(-tr.W + 3, tr.W - 3);
       B.warns.push({ lat, t: D.warn, mesh: warnStripe(lat, B.prog, p.progress + 30) });
-      audio.sfx('tick');
+      audio.sfx('alarm'); bigMsg('⚠ ลูกปลาไฟฟ้า!', true);
     }
     for (const w of B.warns) {
       w.t -= dt;
@@ -2140,9 +2141,9 @@
       if (w.t <= 0 || !running) {
         w.dead = true;
         if (running) {
-          const f = PB.buildElectricFish(); race.scene.add(f.root);
+          const f = PB.buildElectricFish(); f.root.scale.setScalar(FISH_SCALE); race.scene.add(f.root);
           B.fish.push({ f, prog: B.prog + BOSS_MOUTH, lat: w.lat, speed: B.speed + 78, t: 0 });
-          audio.sfx('turbo');
+          audio.sfx('zap');
         }
       }
     }
@@ -2150,15 +2151,15 @@
     for (const fsh of B.fish) {
       fsh.t += dt; fsh.prog += fsh.speed * dt / 2.5;
       const r = roadAt(fsh.prog, fsh.lat);
-      fsh.f.root.position.copy(r.pos).add(new V3(0, 1.4 + Math.sin(fsh.t * 10) * 0.15, 0));
+      fsh.f.root.position.copy(r.pos).add(new V3(0, 0.9 * FISH_SCALE + Math.sin(fsh.t * 10) * 0.2, 0));
       fsh.f.root.rotation.y = Math.atan2(r.s.flat.x, r.s.flat.z);
       fsh.f.tailFin.rotation.y = Math.sin(fsh.t * 30) * 0.5;
       fsh.f.halo.material.opacity = 0.2 + Math.random() * 0.3;
       if (Math.random() < 0.25 && fsh.f.root.position.distanceTo(camera.position) < 90) {
-        const c = fsh.f.root.position; makeBolt(c.clone().add(new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1))), c.clone().add(new V3(rand(-1.5, 1.5), rand(-1, 1), rand(-1.5, 1.5))), { core: 0.05, glow: 0.2, jitter: 0.4, segs: 4, forks: 0, life: 0.1 });
+        const c = fsh.f.root.position, k = FISH_SCALE; makeBolt(c.clone().add(new V3(rand(-1, 1) * k, rand(-1, 1) * k, rand(-1, 1) * k)), c.clone().add(new V3(rand(-1.5, 1.5) * k, rand(-1, 1) * k, rand(-1.5, 1.5) * k)), { core: 0.08, glow: 0.3, jitter: 0.6, segs: 4, forks: 0, life: 0.1 });
       }
       const dp = (fsh.prog - p.progress) * 2.5;
-      if (running && Math.abs(dp) < 2.4 && Math.abs(fsh.lat - plat) < 2.1 && p.respawnT <= 0) bossGameOver('fish');
+      if (running && Math.abs(dp) < 1.4 * FISH_SCALE && Math.abs(fsh.lat - plat) < FISH_HALF && p.respawnT <= 0) bossGameOver('fish');
       if (dp > 60) fsh.dead = true;
     }
     B.fish = B.fish.filter(fsh => { if (fsh.dead) { race.scene.remove(fsh.f.root); PB.disposeTree(fsh.f.root); } return !fsh.dead; });

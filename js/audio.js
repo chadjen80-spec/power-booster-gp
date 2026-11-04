@@ -63,6 +63,9 @@
       case 'boost2': A.beep(450, 0.4, 'sawtooth', 0.14, 1000); break;
       case 'boost3': A.beep(600, 0.6, 'sawtooth', 0.16, 1600); A.noise(0.6, 0.2, 4000); break;
       case 'tick': A.beep(1000, 0.06, 'square', 0.07); break;
+      // boss stage: two-tone siren when an electric fish is about to charge, and a crackling zap when it goes
+      case 'alarm': [0, 1, 2, 3].forEach(i => setTimeout(() => A.beep(i % 2 ? 660 : 990, 0.16, 'square', 0.13), i * 190)); break;
+      case 'zap': A.noise(0.35, 0.3, 6000); A.beep(1700, 0.45, 'sawtooth', 0.14, 180); setTimeout(() => A.noise(0.15, 0.25, 8000), 90); break;
       case 'turbo': A.noise(0.4, 0.2, 2500); A.beep(400, 0.3, 'triangle', 0.1, 900); break;
       case 'lap': A.beep(660, 0.12, 'square', 0.12); setTimeout(() => A.beep(990, 0.25, 'square', 0.12), 130); break;
       case 'finish': [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => A.beep(f, 0.3, 'square', 0.12), i * 140)); break;
