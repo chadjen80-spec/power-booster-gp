@@ -76,30 +76,56 @@
     }
   };
 
-  // Continuous engine hum for the player
+  // Continuous engine sound for the player: a jet board, not a car.
+  //  - roar: rushing noise through a band-pass that opens up with speed (afterburner when boosting)
+  //  - whine: a turbine's high pitch climbing with speed
+  //  - laser: a sci-fi buzz with a fast wobble, rising with speed and each Booster stage
   A.startEngine = function () {
     if (!A.ctx || A.engine) return;
-    const o = A.ctx.createOscillator(), o2 = A.ctx.createOscillator();
-    const f = A.ctx.createBiquadFilter(), g = A.ctx.createGain();
-    o.type = 'sawtooth'; o2.type = 'square';
-    f.type = 'lowpass'; f.frequency.value = 900;
-    g.gain.value = 0.0;
-    o.connect(f); o2.connect(f); f.connect(g); g.connect(A.master);
-    o.start(); o2.start();
-    A.engine = { o, o2, f, g };
+    const c = A.ctx, out = c.createGain(); out.gain.value = 1.6; out.connect(A.master);
+    // jet roar
+    const noise = c.createBufferSource(); noise.buffer = A.noiseBuf; noise.loop = true;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.7; bp.frequency.value = 400;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3000;
+    const roar = c.createGain(); roar.gain.value = 0;
+    noise.connect(bp); bp.connect(lp); lp.connect(roar); roar.connect(out);
+    // turbine whine (two slightly detuned sines shimmer against each other)
+    const w1 = c.createOscillator(), w2 = c.createOscillator(); w1.type = w2.type = 'sine';
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 600;
+    const whine = c.createGain(); whine.gain.value = 0;
+    w1.connect(hp); w2.connect(hp); hp.connect(whine); whine.connect(out);
+    // laser hum: sawtooth through a resonant band-pass, its pitch wobbled by a fast LFO
+    const lz = c.createOscillator(); lz.type = 'sawtooth';
+    const lzf = c.createBiquadFilter(); lzf.type = 'bandpass'; lzf.Q.value = 6;
+    const lfo = c.createOscillator(); lfo.type = 'sine';
+    const lfoDepth = c.createGain(); lfoDepth.gain.value = 10;
+    lfo.connect(lfoDepth); lfoDepth.connect(lz.frequency);
+    const laser = c.createGain(); laser.gain.value = 0;
+    lz.connect(lzf); lzf.connect(laser); laser.connect(out);
+    [noise, w1, w2, lz, lfo].forEach(n => n.start());
+    A.engine = { out, noise, bp, lp, roar, w1, w2, whine, lz, lzf, lfo, lfoDepth, laser };
   };
   A.setEngine = function (speed, stage) {
-    if (!A.engine) return;
-    const t = A.ctx.currentTime;
-    const base = 55 + Math.abs(speed) * 1.4 + stage * 30;
-    A.engine.o.frequency.setTargetAtTime(base, t, 0.05);
-    A.engine.o2.frequency.setTargetAtTime(base * 0.503, t, 0.05);
-    A.engine.f.frequency.setTargetAtTime(500 + Math.abs(speed) * 12 + stage * 600, t, 0.05);
-    A.engine.g.gain.setTargetAtTime(0.035 + Math.min(Math.abs(speed), 120) / 120 * 0.04, t, 0.1);
+    const e = A.engine; if (!e) return;
+    const t = A.ctx.currentTime, k = 0.06;
+    const v = Math.min(Math.abs(speed) / 130, 1.25);   // 0 at rest, ~1 at top speed, more when boosting
+    e.bp.frequency.setTargetAtTime(280 + v * 1500 + stage * 260, t, k);
+    e.lp.frequency.setTargetAtTime(1800 + v * 3500 + stage * 800, t, k);
+    e.roar.gain.setTargetAtTime(0.025 + v * 0.075 + stage * 0.02, t, 0.1);
+    const wf = 700 + v * 2400 + stage * 420;
+    e.w1.frequency.setTargetAtTime(wf, t, k); e.w2.frequency.setTargetAtTime(wf * 1.008, t, k);
+    e.whine.gain.setTargetAtTime(0.004 + v * 0.012 + stage * 0.003, t, 0.1);
+    const lf = 150 + v * 380 + stage * 140;
+    e.lz.frequency.setTargetAtTime(lf, t, k);
+    e.lzf.frequency.setTargetAtTime(lf * 3, t, k);
+    e.lfo.frequency.setTargetAtTime(9 + v * 14 + stage * 5, t, k);
+    e.lfoDepth.gain.setTargetAtTime(lf * 0.05, t, k);
+    e.laser.gain.setTargetAtTime(0.008 + v * 0.016 + stage * 0.012, t, 0.1);
   };
   A.stopEngine = function () {
-    if (!A.engine) return;
-    try { A.engine.o.stop(); A.engine.o2.stop(); } catch (e) { /* already stopped */ }
+    const e = A.engine; if (!e) return;
+    try { [e.noise, e.w1, e.w2, e.lz, e.lfo].forEach(n => n.stop()); } catch (err) { /* already stopped */ }
+    e.out.disconnect();
     A.engine = null;
   };
 })();
