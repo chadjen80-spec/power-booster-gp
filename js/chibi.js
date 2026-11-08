@@ -507,6 +507,86 @@
     }));
   };
 
+  // ---------- face decal for Blender heads ----------
+  // A .glb head can carry a thin mesh named "Face" laid over the front of the head, with planar UVs: u runs left->right
+  // across FACE_BOX.x, v runs top->bottom down FACE_BOX.y (in the Head node's own units). The game paints the face onto it
+  // (open eyes, plus a closed frame for blinking). Layout is in the same Head-local units.
+  const FACE_BOX = { x0: -0.6, x1: 0.6, y0: 0.05, y1: -0.95 };
+  const FACE_LAYOUT = { eyeX: 0.32, eyeY: -0.42, eyeRX: 0.145, eyeRY: 0.17, browY: -0.13, browIn: 0.15, browOut: 0.46,
+    mouthY: -0.76, mouthW: 0.075, blushX: 0.43, blushY: -0.67 };
+  PB.FACE_BOX = FACE_BOX; PB.FACE_LAYOUT = FACE_LAYOUT;
+  PB.paintFaceDecal = function (def, closed, L) {
+    L = Object.assign({}, FACE_LAYOUT, L || {});
+    const W = 1024, H = Math.round(W * (FACE_BOX.y0 - FACE_BOX.y1) / (FACE_BOX.x1 - FACE_BOX.x0));
+    const k = W / (FACE_BOX.x1 - FACE_BOX.x0);   // px per unit (same both ways)
+    const P = (x, y) => [(x - FACE_BOX.x0) * k, (FACE_BOX.y0 - y) * k];
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    const ec = new THREE.Color(def.eyes), hex = col => '#' + col.getHexString();
+    const deep = hex(ec.clone().multiplyScalar(0.28)), mid = hex(ec.clone().multiplyScalar(0.75)), light = hex(ec.clone().lerp(new THREE.Color(1, 1, 1), 0.35));
+    const lash = '#3a1e16', brow = '#6a3a24';
+    x.lineCap = 'round'; x.lineJoin = 'round';
+    for (const s of [-1, 1]) {   // s = -1: the character's right eye (screen left)
+      const [cx, cy] = P(s * L.eyeX, L.eyeY), rx = L.eyeRX * k, ry = L.eyeRY * k;
+      if (closed) {
+        // lids shut: a soft downward curve with lashes along it and the flick at the outer corner
+        x.strokeStyle = lash; x.lineWidth = ry * 0.16;
+        x.beginPath(); x.ellipse(cx, cy + ry * 0.05, rx * 1.02, ry * 0.42, 0, Math.PI * 0.08, Math.PI * 0.92); x.stroke();
+        x.lineWidth = ry * 0.1;
+        x.beginPath(); x.moveTo(cx + s * rx * 0.98, cy + ry * 0.1); x.lineTo(cx + s * rx * 1.22, cy - ry * 0.12); x.stroke();
+      } else {
+        x.save();
+        x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.clip();
+        x.fillStyle = '#fffaf6'; x.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);   // white of the eye
+        // iris: dark at the top, glowing lighter toward the bottom, with soft rings
+        const ix = cx - s * rx * 0.04, iy = cy + ry * 0.1, irx = rx * 0.84, iry = ry * 0.9;
+        const g = x.createLinearGradient(0, iy - iry, 0, iy + iry);
+        g.addColorStop(0, deep); g.addColorStop(0.45, mid); g.addColorStop(1, light);
+        x.fillStyle = g; x.beginPath(); x.ellipse(ix, iy, irx, iry, 0, 0, Math.PI * 2); x.fill();
+        x.globalAlpha = 0.35; x.fillStyle = light; x.beginPath(); x.ellipse(ix, iy + iry * 0.45, irx * 0.62, iry * 0.4, 0, 0, Math.PI * 2); x.fill();
+        x.globalAlpha = 1; x.fillStyle = deep; x.beginPath(); x.ellipse(ix, iy + iry * 0.02, irx * 0.42, iry * 0.48, 0, 0, Math.PI * 2); x.fill();
+        x.strokeStyle = deep; x.lineWidth = rx * 0.06; x.beginPath(); x.ellipse(ix, iy, irx, iry, 0, 0, Math.PI * 2); x.stroke();
+        // the upper lid casts a soft shadow over the top of the eye
+        const sh = x.createLinearGradient(0, cy - ry, 0, cy - ry * 0.35);
+        sh.addColorStop(0, 'rgba(90,40,30,0.55)'); sh.addColorStop(1, 'rgba(90,40,30,0)');
+        x.fillStyle = sh; x.fillRect(cx - rx, cy - ry, rx * 2, ry * 0.7);
+        // highlights: a big one up-left, a small one low-right
+        x.fillStyle = '#ffffff';
+        x.beginPath(); x.ellipse(ix - irx * 0.3, iy - iry * 0.42, irx * 0.24, iry * 0.22, 0, 0, Math.PI * 2); x.fill();
+        x.beginPath(); x.ellipse(ix + irx * 0.32, iy + iry * 0.38, irx * 0.1, iry * 0.09, 0, 0, Math.PI * 2); x.fill();
+        x.restore();
+        // thick upper lash line with a flick at the outer corner, thin lower lash
+        x.strokeStyle = lash; x.lineWidth = ry * 0.2;
+        x.beginPath(); x.ellipse(cx, cy + ry * 0.04, rx * 1.04, ry * 1.0, 0, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
+        x.fillStyle = lash;
+        x.beginPath(); x.moveTo(cx + s * rx * 0.86, cy - ry * 0.62); x.lineTo(cx + s * rx * 1.3, cy - ry * 0.48);
+        x.lineTo(cx + s * rx * 1.02, cy - ry * 0.2); x.closePath(); x.fill();
+        x.lineWidth = ry * 0.05; x.globalAlpha = 0.7;
+        x.beginPath(); x.ellipse(cx, cy, rx * 0.96, ry * 0.97, 0, Math.PI * (s < 0 ? 0.55 : 0.08), Math.PI * (s < 0 ? 0.92 : 0.45)); x.stroke();
+        x.globalAlpha = 1;
+      }
+      // brows: tapered arcs
+      const [bx0, by0] = P(s * L.browIn, L.browY - 0.02), [bx1, by1] = P(s * L.browOut, L.browY - 0.04), [bxm, bym] = P(s * (L.browIn + L.browOut) / 2, L.browY + 0.03);
+      x.strokeStyle = brow; x.lineWidth = ry * 0.13;
+      x.beginPath(); x.moveTo(bx0, by0); x.quadraticCurveTo(bxm, bym, bx1, by1); x.stroke();
+      // blush with two little hatch strokes
+      const [hx, hy] = P(s * L.blushX, L.blushY);
+      const bl = x.createRadialGradient(hx, hy, 0, hx, hy, rx * 0.8);
+      bl.addColorStop(0, 'rgba(255,120,130,0.45)'); bl.addColorStop(1, 'rgba(255,120,130,0)');
+      x.fillStyle = bl; x.beginPath(); x.ellipse(hx, hy, rx * 0.8, ry * 0.4, 0, 0, Math.PI * 2); x.fill();
+      x.strokeStyle = 'rgba(220,90,100,0.75)'; x.lineWidth = rx * 0.06;
+      for (const d of [-0.18, 0.12]) { x.beginPath(); x.moveTo(hx + rx * d - rx * 0.05, hy + ry * 0.1); x.lineTo(hx + rx * d + rx * 0.08, hy - ry * 0.1); x.stroke(); }
+    }
+    // small smile
+    const [mx, my] = P(0, L.mouthY), mw = L.mouthW * k;
+    x.strokeStyle = '#5a2a20'; x.lineWidth = mw * 0.12;
+    x.beginPath(); x.moveTo(mx - mw, my - mw * 0.12); x.quadraticCurveTo(mx, my + mw * 0.42, mx + mw, my - mw * 0.12); x.stroke();
+    const t = new THREE.CanvasTexture(c);
+    t.flipY = false;   // glTF UV convention
+    t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
+    return t;
+  };
+
   function buildGltfRider(def) {
     const src = def._gltf.clone(true);
     src.traverse(o => {   // drop glTF extras (userData) so nothing exported from the game is mistaken for live data
@@ -523,11 +603,14 @@
     src.traverse(o => {
       if (!o.isMesh) return;
       o.castShadow = true;
-      // lit Blender materials get the game's toon shading; unlit ones (e.g. a painted face) stay as they are
+      // lit Blender materials get the same soft, slightly glossy look as the code-built racers (keeping colour, texture
+      // and normal map); unlit ones (e.g. a painted face) stay as they are
       const mats = Array.isArray(o.material) ? o.material : [o.material];
-      const toonMats = mats.map(m => m.isMeshStandardMaterial ? toon(m.color.getHex(), {
-        map: m.map, transparent: m.transparent, opacity: m.opacity, alphaTest: m.alphaTest, side: m.side }) : m);
-      o.material = Array.isArray(o.material) ? toonMats : toonMats[0];
+      const softMats = mats.map(m => m.isMeshStandardMaterial ? new THREE.MeshStandardMaterial({
+        color: m.color, map: m.map, normalMap: m.normalMap, normalScale: m.normalScale, roughness: Math.min(0.85, Math.max(0.4, m.roughness)),
+        metalness: 0, emissive: m.map ? 0x0b0b0b : m.color.clone().multiplyScalar(0.07),
+        transparent: m.transparent, opacity: m.opacity, alphaTest: m.alphaTest, side: m.side }) : m);
+      o.material = Array.isArray(o.material) ? softMats : softMats[0];
     });
     const find = name => src.getObjectByName(name) || new THREE.Object3D();   // missing part: animate a dummy
     const upper = find('Upper');
@@ -535,7 +618,18 @@
     const hair = [];
     src.traverse(o => { if (/^Hair/i.test(o.name)) hair.push({ g: o, side: Math.sign(o.position.x), w: 1, z: o.rotation.z, x: o.rotation.x }); });
     head.userData.sway = hair;
-    head.userData.face = null;   // a .glb may carry stale extras from an export: no code-built blink face here
+    head.userData.face = null;
+    // a mesh named "Face" over the head: the game paints the face onto it and blinks by swapping to a closed frame
+    let faceMesh = null;
+    src.traverse(o => { if (!faceMesh && o.isMesh && /^Face/i.test(o.name)) faceMesh = o; });
+    if (!faceMesh) { const f = src.getObjectByName('Face'); if (f) f.traverse(o => { if (!faceMesh && o.isMesh) faceMesh = o; }); }
+    if (faceMesh) {
+      const open = PB.paintFaceDecal(def, false), shut = PB.paintFaceDecal(def, true);
+      const mat = new THREE.MeshBasicMaterial({ map: open, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      mat.userData.maps = [open, shut];
+      faceMesh.material = mat; faceMesh.castShadow = false; faceMesh.renderOrder = 2;
+      head.userData.face = { mat, open, shut };
+    }
     return { rider, legs: find('Legs'), upper, head, arms: [find('ArmR'), find('ArmL')], hipY: upper.position.y };
   }
 
