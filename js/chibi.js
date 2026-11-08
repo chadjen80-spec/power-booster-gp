@@ -351,6 +351,22 @@
     g.computeVertexNormals();
     return g;
   }
+  // A small five-fingered hand at the end of an arm group (arm hangs along -Y, +Z is the rider's front):
+  // a flat palm, four fingers fanned front-to-back, and a thumb pointing forward.
+  const fingerGeo = (r, len) => new THREE.CapsuleGeometry(r, len, 3, 8);
+  function buildHand(skinM, arm, y0) {
+    y0 = y0 == null ? -0.47 : y0;
+    const palm = mesh(sphere(1, 12, 10), skinM, 0, y0, 0, arm); palm.scale.set(0.058, 0.08, 0.072);
+    [[-0.05, 0.044], [-0.017, 0.058], [0.017, 0.056], [0.05, 0.042]].forEach(([z, len]) => {   // little finger at the back
+      const f = mesh(fingerGeo(0.0165, len), skinM, 0, y0 - 0.07 - len / 2, z * 1.1, arm);
+      f.rotation.x = z * 3.4;   // fan out a little
+    });
+    const thumb = mesh(fingerGeo(0.02, 0.042), skinM, 0.008, y0 - 0.01, 0.07, arm);
+    thumb.rotation.x = -1.0;
+    return palm;
+  }
+  PB.buildHand = buildHand;
+
   function buildRider(def) {
     // node names are the contract with Blender models (see docs/BLENDER.md)
     const rider = new THREE.Group(); rider.name = 'Rider';
@@ -394,7 +410,7 @@
       mesh(sphere(0.105, 14, 10), shirtM, 0, 0, 0, sh);   // shoulder joint: round, so it looks right at any arm angle
       mesh(capsule(0.095, 0.14), shirtM, 0, -0.12, 0, sh);   // sleeve
       mesh(capsule(0.07, 0.2), skinM, 0, -0.3, 0, sh);
-      const hand = mesh(sphere(0.09, 12, 10), skinM, 0, -0.48, 0, sh); hand.scale.set(1, 1.15, 0.85);
+      buildHand(skinM, sh);
       arms.push(sh);
     }
     if (def.wings) {
