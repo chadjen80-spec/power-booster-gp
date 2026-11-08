@@ -509,6 +509,10 @@
 
   function buildGltfRider(def) {
     const src = def._gltf.clone(true);
+    src.traverse(o => {   // drop glTF extras (userData) so nothing exported from the game is mistaken for live data
+      o.userData = {};
+      (Array.isArray(o.material) ? o.material : o.material ? [o.material] : []).forEach(m => { m.userData = {}; });
+    });
     const rider = new THREE.Group(); rider.name = 'Rider';
     // size it so the feet sit on the board and the character is chibi-height, whatever units it was made in
     const box = new THREE.Box3().setFromObject(src), size = box.getSize(new V3());
@@ -531,6 +535,7 @@
     const hair = [];
     src.traverse(o => { if (/^Hair/i.test(o.name)) hair.push({ g: o, side: Math.sign(o.position.x), w: 1, z: o.rotation.z, x: o.rotation.x }); });
     head.userData.sway = hair;
+    head.userData.face = null;   // a .glb may carry stale extras from an export: no code-built blink face here
     return { rider, legs: find('Legs'), upper, head, arms: [find('ArmR'), find('ArmL')], hipY: upper.position.y };
   }
 
@@ -592,7 +597,7 @@
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         mats.forEach(m => {
           if (m.map) m.map.dispose(); if (m.emissiveMap && m.emissiveMap !== m.map) m.emissiveMap.dispose();
-          (m.userData.maps || []).forEach(t => t.dispose());   // e.g. the face's blink frame
+          (m.userData.maps || []).forEach(t => t && t.isTexture && t.dispose());   // e.g. the face's blink frame
           m.dispose();
         });
       }
