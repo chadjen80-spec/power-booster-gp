@@ -102,78 +102,96 @@
   }
 
   // ---------- painted face (eyes, lashes, blush, mouth) on a sphere patch over the head ----------
-  const FACE = { phiStart: Math.PI / 2 - 1.05, phiLen: 2.1, thetaStart: 1.0, thetaLen: 1.05 };
+  const FACE = { phiStart: Math.PI / 2 - 1.05, phiLen: 2.1, thetaStart: 1.0, thetaLen: 1.55 };   // reaches down to the chin
   function ellipse(x, cx, cy, rx, ry) { x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); }
-  // closed: the blink frame (lids shut as a soft downward curve with the lashes along it)
-  function faceTexture(def, closed) {
-    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
-    const x = c.getContext('2d');
-    const ec = new THREE.Color(def.eyes);
-    const hex = col => '#' + col.getHexString();
-    const deep = hex(ec.clone().multiplyScalar(0.35)), mid = hex(ec), light = hex(ec.clone().lerp(new THREE.Color(1, 1, 1), 0.5));
+  // One anime face for every racer (code-built heads and Blender "Face" layers alike): big glossy eyes with a thick lash
+  // line and a flick at the outer corner, tapered brows, a small smile, blush with hatch strokes. closed = the blink frame.
+  // G holds where things go on the canvas, in pixels: eye(s) -> {cx, cy, rx, ry}, brow(s) -> [x0, y0, xm, ym, x1, y1],
+  // blush(s) -> [x, y], mouth -> [x, y, halfWidth], nose -> [x, y] or null, browColor. s = -1 is the character's right (screen left).
+  function drawAnimeFace(x, def, closed, G) {
+    const ec = new THREE.Color(def.eyes), hex = col => '#' + col.getHexString();
+    const deep = hex(ec.clone().multiplyScalar(0.28)), mid = hex(ec.clone().multiplyScalar(0.75)), light = hex(ec.clone().lerp(new THREE.Color(1, 1, 1), 0.35));
+    const lash = '#3a1e16';
+    x.lineCap = 'round'; x.lineJoin = 'round';
     for (const s of [-1, 1]) {
-      const cx = 256 + s * 100, cy = 148, w = 50, h = 68;
+      const { cx, cy, rx, ry } = G.eye(s);
       if (closed) {
-        x.strokeStyle = '#1c1024'; x.lineCap = 'round';
-        x.lineWidth = def.lashes ? 11 : 9;
-        x.beginPath(); x.ellipse(cx, cy + 14, w, 20, 0, Math.PI * 0.08, Math.PI * 0.92); x.stroke();
-        if (def.lashes) {   // outer lash flick
-          const ox = cx + s * (w - 4), oy = cy + 22;
-          x.lineWidth = 6;
-          x.beginPath(); x.moveTo(ox, oy); x.lineTo(ox + s * 15, oy - 6); x.stroke();
-        }
-        x.strokeStyle = hex(new THREE.Color(def.hair).multiplyScalar(0.55)); x.lineWidth = 5;
-        x.beginPath(); x.ellipse(cx, cy - 54, 26, 9, 0, Math.PI * 1.15, Math.PI * 1.85); x.stroke();   // brow dips a touch
-        continue;
+        // lids shut: a soft downward curve with lashes along it and the flick at the outer corner
+        x.strokeStyle = lash; x.lineWidth = ry * 0.16;
+        x.beginPath(); x.ellipse(cx, cy + ry * 0.05, rx * 1.02, ry * 0.42, 0, Math.PI * 0.08, Math.PI * 0.92); x.stroke();
+        x.lineWidth = ry * 0.1;
+        x.beginPath(); x.moveTo(cx + s * rx * 0.98, cy + ry * 0.1); x.lineTo(cx + s * rx * 1.22, cy - ry * 0.12); x.stroke();
+      } else {
+        x.save();
+        x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.clip();
+        x.fillStyle = '#fffaf6'; x.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);   // white of the eye
+        // iris: dark at the top, glowing lighter toward the bottom, with soft rings
+        const ix = cx - s * rx * 0.04, iy = cy + ry * 0.1, irx = rx * 0.84, iry = ry * 0.9;
+        const g = x.createLinearGradient(0, iy - iry, 0, iy + iry);
+        g.addColorStop(0, deep); g.addColorStop(0.45, mid); g.addColorStop(1, light);
+        x.fillStyle = g; x.beginPath(); x.ellipse(ix, iy, irx, iry, 0, 0, Math.PI * 2); x.fill();
+        x.globalAlpha = 0.35; x.fillStyle = light; x.beginPath(); x.ellipse(ix, iy + iry * 0.45, irx * 0.62, iry * 0.4, 0, 0, Math.PI * 2); x.fill();
+        x.globalAlpha = 1; x.fillStyle = deep; x.beginPath(); x.ellipse(ix, iy + iry * 0.02, irx * 0.42, iry * 0.48, 0, 0, Math.PI * 2); x.fill();
+        x.strokeStyle = deep; x.lineWidth = rx * 0.06; x.beginPath(); x.ellipse(ix, iy, irx, iry, 0, 0, Math.PI * 2); x.stroke();
+        // the upper lid casts a soft shadow over the top of the eye
+        const sh = x.createLinearGradient(0, cy - ry, 0, cy - ry * 0.35);
+        sh.addColorStop(0, 'rgba(90,40,30,0.55)'); sh.addColorStop(1, 'rgba(90,40,30,0)');
+        x.fillStyle = sh; x.fillRect(cx - rx, cy - ry, rx * 2, ry * 0.7);
+        // highlights: a big one up-left, a small one low-right
+        x.fillStyle = '#ffffff';
+        x.beginPath(); x.ellipse(ix - irx * 0.3, iy - iry * 0.42, irx * 0.24, iry * 0.22, 0, 0, Math.PI * 2); x.fill();
+        x.beginPath(); x.ellipse(ix + irx * 0.32, iy + iry * 0.38, irx * 0.1, iry * 0.09, 0, 0, Math.PI * 2); x.fill();
+        x.restore();
+        // thick upper lash line with a flick at the outer corner, thin lower lash
+        x.strokeStyle = lash; x.lineWidth = ry * 0.2;
+        x.beginPath(); x.ellipse(cx, cy + ry * 0.04, rx * 1.04, ry * 1.0, 0, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
+        x.fillStyle = lash;
+        x.beginPath(); x.moveTo(cx + s * rx * 0.86, cy - ry * 0.62); x.lineTo(cx + s * rx * 1.3, cy - ry * 0.48);
+        x.lineTo(cx + s * rx * 1.02, cy - ry * 0.2); x.closePath(); x.fill();
+        x.lineWidth = ry * 0.05; x.globalAlpha = 0.7;
+        x.beginPath(); x.ellipse(cx, cy, rx * 0.96, ry * 0.97, 0, Math.PI * (s < 0 ? 0.55 : 0.08), Math.PI * (s < 0 ? 0.92 : 0.45)); x.stroke();
+        x.globalAlpha = 1;
       }
-      // eye white, used as clip for the iris
-      x.save();
-      x.fillStyle = '#ffffff'; ellipse(x, cx, cy + 4, w, h - 4); x.fill();
-      x.clip();
-      const g = x.createLinearGradient(0, cy - h, 0, cy + h);
-      g.addColorStop(0, deep); g.addColorStop(0.45, mid); g.addColorStop(1, light);
-      x.fillStyle = g; ellipse(x, cx - s * 3, cy + 10, w * 0.88, h * 0.92); x.fill();
-      x.fillStyle = deep; ellipse(x, cx - s * 3, cy + 6, w * 0.4, h * 0.5); x.fill();
-      // iris ring
-      x.strokeStyle = deep; x.lineWidth = 4; ellipse(x, cx - s * 3, cy + 10, w * 0.88, h * 0.92); x.stroke();
-      x.restore();
-      // sparkles
-      x.fillStyle = '#ffffff';
-      ellipse(x, cx - 16, cy - 20, 15, 20); x.fill();
-      ellipse(x, cx + 17, cy + 32, 7, 7); x.fill();
-      ellipse(x, cx + 6, cy - 36, 5, 5); x.fill();
-      // thick upper lash
-      x.strokeStyle = '#1c1024'; x.lineCap = 'round';
-      x.lineWidth = def.lashes ? 13 : 10;
-      x.beginPath(); x.ellipse(cx, cy + 6, w + 4, h, 0, Math.PI * 1.08, Math.PI * 1.92); x.stroke();
-      if (def.lashes) {
-        // outer wing
-        const ox = cx + s * (w - 2), oy = cy - 26;
-        x.lineWidth = 7;
-        x.beginPath(); x.moveTo(ox, oy); x.lineTo(ox + s * 16, oy - 12); x.stroke();
-        x.beginPath(); x.moveTo(ox - s * 4, oy - 8); x.lineTo(ox + s * 8, oy - 22); x.stroke();
-      }
-      // lower lash
-      x.lineWidth = 3;
-      x.beginPath(); x.ellipse(cx, cy + 2, w - 4, h - 2, 0, Math.PI * 0.32, Math.PI * 0.68); x.stroke();
-      // brow
-      x.strokeStyle = hex(new THREE.Color(def.hair).multiplyScalar(0.55)); x.lineWidth = 5;
-      x.beginPath(); x.ellipse(cx, cy - 58, 26, 9, 0, Math.PI * 1.15, Math.PI * 1.85); x.stroke();
+      // brows: tapered arcs
+      const [bx0, by0, bxm, bym, bx1, by1] = G.brow(s);
+      x.strokeStyle = G.browColor; x.lineWidth = ry * 0.13;
+      x.beginPath(); x.moveTo(bx0, by0); x.quadraticCurveTo(bxm, bym, bx1, by1); x.stroke();
+      // blush with two little hatch strokes
+      const [hx, hy] = G.blush(s);
+      const bl = x.createRadialGradient(hx, hy, 0, hx, hy, rx * 0.8);
+      bl.addColorStop(0, 'rgba(255,120,130,0.45)'); bl.addColorStop(1, 'rgba(255,120,130,0)');
+      x.fillStyle = bl; x.beginPath(); x.ellipse(hx, hy, rx * 0.8, ry * 0.4, 0, 0, Math.PI * 2); x.fill();
+      x.strokeStyle = 'rgba(220,90,100,0.75)'; x.lineWidth = rx * 0.06;
+      for (const d of [-0.18, 0.12]) { x.beginPath(); x.moveTo(hx + rx * d - rx * 0.05, hy + ry * 0.1); x.lineTo(hx + rx * d + rx * 0.08, hy - ry * 0.1); x.stroke(); }
     }
-    // blush
-    x.fillStyle = 'rgba(255,110,140,0.4)';
-    for (const s of [-1, 1]) { ellipse(x, 256 + s * 158, 214, 30, 12); x.fill(); }
-    if (def.mark === 'heart') {
+    if (G.nose) { x.fillStyle = 'rgba(200,120,110,0.5)'; x.beginPath(); x.ellipse(G.nose[0], G.nose[1], G.mouth[2] * 0.14, G.mouth[2] * 0.1, 0, 0, Math.PI * 2); x.fill(); }
+    // small smile
+    const [mx, my, mw] = G.mouth;
+    x.strokeStyle = '#5a2a20'; x.lineWidth = mw * 0.12;
+    x.beginPath(); x.moveTo(mx - mw, my - mw * 0.12); x.quadraticCurveTo(mx, my + mw * 0.42, mx + mw, my - mw * 0.12); x.stroke();
+  }
+
+  // code-built heads: the face is painted on a sphere patch (FACE) over the front of the head, 512 px across;
+  // 1 px = the same angle both ways, so the patch is 378 px tall. Proportions follow Blaze's sculpted head.
+  function faceTexture(def, closed) {
+    const c = document.createElement('canvas'); c.width = 512; c.height = Math.round(512 * FACE.thetaLen / FACE.phiLen);
+    const x = c.getContext('2d');
+    const C = 256, ry = 58;
+    drawAnimeFace(x, def, closed, {
+      eye: s => ({ cx: C + s * 100, cy: 186, rx: 50, ry }),
+      brow: s => [C + s * 48, 108, C + s * 96, 94, C + s * 146, 112],
+      blush: s => [C + s * 148, 268],
+      mouth: [C, 304, 24],
+      nose: [C, 256],
+      browColor: '#' + new THREE.Color(def.hair).multiplyScalar(0.5).getHexString(),
+    });
+    if (def.mark === 'heart') {   // Sky's cheek sticker
       x.fillStyle = '#e8304a';
-      const hx = 256 + 156, hy = 210;
+      const hx = C + 158, hy = 262;
       x.beginPath(); x.moveTo(hx, hy + 12);
       x.bezierCurveTo(hx - 16, hy, hx - 10, hy - 12, hx, hy - 4);
       x.bezierCurveTo(hx + 10, hy - 12, hx + 16, hy, hx, hy + 12); x.fill();
     }
-    // tiny mouth
-    x.fillStyle = 'rgba(200,120,120,0.45)'; ellipse(x, 256, 206, 3, 2); x.fill();   // a hint of a nose
-    x.strokeStyle = '#8a2a3a'; x.lineWidth = 4; x.lineCap = 'round';
-    x.beginPath(); x.arc(256, 228, 7, Math.PI * 0.15, Math.PI * 0.85); x.stroke();
     const t = new THREE.CanvasTexture(c);
     t.anisotropy = 4;
     return t;
@@ -522,65 +540,14 @@
     const P = (x, y) => [(x - FACE_BOX.x0) * k, (FACE_BOX.y0 - y) * k];
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const x = c.getContext('2d');
-    const ec = new THREE.Color(def.eyes), hex = col => '#' + col.getHexString();
-    const deep = hex(ec.clone().multiplyScalar(0.28)), mid = hex(ec.clone().multiplyScalar(0.75)), light = hex(ec.clone().lerp(new THREE.Color(1, 1, 1), 0.35));
-    const lash = '#3a1e16', brow = '#6a3a24';
-    x.lineCap = 'round'; x.lineJoin = 'round';
-    for (const s of [-1, 1]) {   // s = -1: the character's right eye (screen left)
-      const [cx, cy] = P(s * L.eyeX, L.eyeY), rx = L.eyeRX * k, ry = L.eyeRY * k;
-      if (closed) {
-        // lids shut: a soft downward curve with lashes along it and the flick at the outer corner
-        x.strokeStyle = lash; x.lineWidth = ry * 0.16;
-        x.beginPath(); x.ellipse(cx, cy + ry * 0.05, rx * 1.02, ry * 0.42, 0, Math.PI * 0.08, Math.PI * 0.92); x.stroke();
-        x.lineWidth = ry * 0.1;
-        x.beginPath(); x.moveTo(cx + s * rx * 0.98, cy + ry * 0.1); x.lineTo(cx + s * rx * 1.22, cy - ry * 0.12); x.stroke();
-      } else {
-        x.save();
-        x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.clip();
-        x.fillStyle = '#fffaf6'; x.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);   // white of the eye
-        // iris: dark at the top, glowing lighter toward the bottom, with soft rings
-        const ix = cx - s * rx * 0.04, iy = cy + ry * 0.1, irx = rx * 0.84, iry = ry * 0.9;
-        const g = x.createLinearGradient(0, iy - iry, 0, iy + iry);
-        g.addColorStop(0, deep); g.addColorStop(0.45, mid); g.addColorStop(1, light);
-        x.fillStyle = g; x.beginPath(); x.ellipse(ix, iy, irx, iry, 0, 0, Math.PI * 2); x.fill();
-        x.globalAlpha = 0.35; x.fillStyle = light; x.beginPath(); x.ellipse(ix, iy + iry * 0.45, irx * 0.62, iry * 0.4, 0, 0, Math.PI * 2); x.fill();
-        x.globalAlpha = 1; x.fillStyle = deep; x.beginPath(); x.ellipse(ix, iy + iry * 0.02, irx * 0.42, iry * 0.48, 0, 0, Math.PI * 2); x.fill();
-        x.strokeStyle = deep; x.lineWidth = rx * 0.06; x.beginPath(); x.ellipse(ix, iy, irx, iry, 0, 0, Math.PI * 2); x.stroke();
-        // the upper lid casts a soft shadow over the top of the eye
-        const sh = x.createLinearGradient(0, cy - ry, 0, cy - ry * 0.35);
-        sh.addColorStop(0, 'rgba(90,40,30,0.55)'); sh.addColorStop(1, 'rgba(90,40,30,0)');
-        x.fillStyle = sh; x.fillRect(cx - rx, cy - ry, rx * 2, ry * 0.7);
-        // highlights: a big one up-left, a small one low-right
-        x.fillStyle = '#ffffff';
-        x.beginPath(); x.ellipse(ix - irx * 0.3, iy - iry * 0.42, irx * 0.24, iry * 0.22, 0, 0, Math.PI * 2); x.fill();
-        x.beginPath(); x.ellipse(ix + irx * 0.32, iy + iry * 0.38, irx * 0.1, iry * 0.09, 0, 0, Math.PI * 2); x.fill();
-        x.restore();
-        // thick upper lash line with a flick at the outer corner, thin lower lash
-        x.strokeStyle = lash; x.lineWidth = ry * 0.2;
-        x.beginPath(); x.ellipse(cx, cy + ry * 0.04, rx * 1.04, ry * 1.0, 0, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
-        x.fillStyle = lash;
-        x.beginPath(); x.moveTo(cx + s * rx * 0.86, cy - ry * 0.62); x.lineTo(cx + s * rx * 1.3, cy - ry * 0.48);
-        x.lineTo(cx + s * rx * 1.02, cy - ry * 0.2); x.closePath(); x.fill();
-        x.lineWidth = ry * 0.05; x.globalAlpha = 0.7;
-        x.beginPath(); x.ellipse(cx, cy, rx * 0.96, ry * 0.97, 0, Math.PI * (s < 0 ? 0.55 : 0.08), Math.PI * (s < 0 ? 0.92 : 0.45)); x.stroke();
-        x.globalAlpha = 1;
-      }
-      // brows: tapered arcs
-      const [bx0, by0] = P(s * L.browIn, L.browY - 0.02), [bx1, by1] = P(s * L.browOut, L.browY - 0.04), [bxm, bym] = P(s * (L.browIn + L.browOut) / 2, L.browY + 0.03);
-      x.strokeStyle = brow; x.lineWidth = ry * 0.13;
-      x.beginPath(); x.moveTo(bx0, by0); x.quadraticCurveTo(bxm, bym, bx1, by1); x.stroke();
-      // blush with two little hatch strokes
-      const [hx, hy] = P(s * L.blushX, L.blushY);
-      const bl = x.createRadialGradient(hx, hy, 0, hx, hy, rx * 0.8);
-      bl.addColorStop(0, 'rgba(255,120,130,0.45)'); bl.addColorStop(1, 'rgba(255,120,130,0)');
-      x.fillStyle = bl; x.beginPath(); x.ellipse(hx, hy, rx * 0.8, ry * 0.4, 0, 0, Math.PI * 2); x.fill();
-      x.strokeStyle = 'rgba(220,90,100,0.75)'; x.lineWidth = rx * 0.06;
-      for (const d of [-0.18, 0.12]) { x.beginPath(); x.moveTo(hx + rx * d - rx * 0.05, hy + ry * 0.1); x.lineTo(hx + rx * d + rx * 0.08, hy - ry * 0.1); x.stroke(); }
-    }
-    // small smile
-    const [mx, my] = P(0, L.mouthY), mw = L.mouthW * k;
-    x.strokeStyle = '#5a2a20'; x.lineWidth = mw * 0.12;
-    x.beginPath(); x.moveTo(mx - mw, my - mw * 0.12); x.quadraticCurveTo(mx, my + mw * 0.42, mx + mw, my - mw * 0.12); x.stroke();
+    drawAnimeFace(x, def, closed, {
+      eye: s => { const [cx, cy] = P(s * L.eyeX, L.eyeY); return { cx, cy, rx: L.eyeRX * k, ry: L.eyeRY * k }; },
+      brow: s => [...P(s * L.browIn, L.browY - 0.02), ...P(s * (L.browIn + L.browOut) / 2, L.browY + 0.03), ...P(s * L.browOut, L.browY - 0.04)],
+      blush: s => P(s * L.blushX, L.blushY),
+      mouth: [...P(0, L.mouthY), L.mouthW * k],
+      nose: null,   // a sculpted head has a real nose
+      browColor: '#6a3a24',
+    });
     const t = new THREE.CanvasTexture(c);
     t.flipY = false;   // glTF UV convention
     t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
