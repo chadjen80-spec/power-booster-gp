@@ -6,7 +6,7 @@
   // lashes: winged upper lashes (girls); mark: cheek sticker
   PB.CHARACTERS = [
     { id: 'nova', bangs: 'blunt', ult: 'thruster', name: 'Nova', title: 'ไอดอลไซเบอร์', skin: 0xffeee6, hair: 0x9cd2ff, hairTip: 0xd8b8ff, eyes: 0x8a4dff, lashes: true,
-      style: 'twintails', acc: 'catears', shirt: 0xe0207a, pants: 0x2a1730, shoes: 0xe6ecf5, accent: 0x22ffd2,
+      style: 'braids', acc: 'catears', shirt: 0xe0207a, pants: 0x2a1730, shoes: 0xe6ecf5, accent: 0x22ffd2,
       board: 0x1b2730, boardAccent: 0x22ffcc, flame: 0x66ffee, stats: { speed: 4, accel: 3, handling: 4 } },
     { id: 'blaze', bangs: 'spiky', ult: 'flame', name: 'Blaze', title: 'นักซิ่งเปลวไฟ', skin: 0xffeadc, hair: 0xff6a1a, eyes: 0x2f7dff,
       style: 'spiky', acc: 'none', shirt: 0xffffff, pants: 0x2b3f8c, shoes: 0x222222, accent: 0xe02020,
@@ -283,6 +283,29 @@
           const t2 = mesh(strandGeo(), tipM, s * 0.02, -1.22, -0.04, g); t2.scale.set(0.3, 0.4, 0.3); t2.rotation.z = s * -0.15;
         }
         break;
+      case 'braids': {   // twin plaits behind the ears: chains of links that swing on springs (see animateRider)
+        head.userData.braids = [];
+        const N = 7, L = 0.17;
+        for (const s of [-1, 1]) {
+          const base = new THREE.Group(); base.name = 'HairBraid' + (s < 0 ? 'R' : 'L');
+          base.position.set(s * 0.84, 0.05, -0.28); base.rotation.z = s * 0.12; head.add(base);
+          mesh(sphere(0.16), soft(def.accent, 0.4), 0, 0.02, 0, base);   // hair tie at the root
+          const segs = []; let parent = base;
+          for (let i = 0; i < N; i++) {
+            const seg = new THREE.Group(); seg.name = base.name + i; seg.position.y = i ? -L : -0.06; parent.add(seg);
+            const w = 0.135 - i * 0.008;   // tapers toward the end
+            // one lobe per link, leaning left and right in turn: that zig-zag is what reads as a plait
+            const lobe = mesh(sphere(1, 12, 10), i >= N - 2 ? tipM : hairM, (i % 2 ? 1 : -1) * w * 0.28, -L / 2, 0, seg);
+            lobe.scale.set(w * 0.95, L * 0.62, w * 0.82); lobe.rotation.z = (i % 2 ? -1 : 1) * 0.55;
+            segs.push({ g: seg, ax: 0, az: 0, vx: 0, vz: 0 });
+            parent = seg;
+          }
+          const tie = mesh(new THREE.TorusGeometry(0.06, 0.025, 6, 14), soft(def.accent, 0.4), 0, -L, 0, parent); tie.rotation.x = Math.PI / 2;
+          const tuft = mesh(strandGeo(), tipM, 0, -L - 0.14, 0, parent); tuft.scale.set(0.16, 0.16, 0.14);
+          head.userData.braids.push({ side: s, segs });
+        }
+        break;
+      }
       case 'lowtails': // big low twin tails hanging behind the ears (like the reference)
         for (const s of [-1, 1]) {
           const g = new THREE.Group(); g.position.set(s * 0.7, -0.12, -0.42); g.rotation.z = s * 0.12; head.add(g); swing(g, s, 1);
@@ -523,6 +546,23 @@
       h.g.rotation.z = h.z + (a.sway + flutter) * h.w;
       h.g.rotation.x = h.x + (wind + flutter) * h.w;
     }
+
+    // braids: every link springs toward a pose set by the rider's motion. Lower links are softer and are also pushed by
+    // how fast the link above is swinging, so a turn starts at the root and whips down the plait, then settles.
+    if (m.braids) for (const b of m.braids) {
+      const side = -a.lean * 0.38 - a.leanV * 0.02;   // flung outward through a turn (more while the turn changes)
+      const back = wind * 0.75 + a.air * 0.6;          // streams back at speed, lifts in the air
+      const n = b.segs.length;
+      b.segs.forEach((sg, i) => {
+        const k = 80 / (1 + i * 0.5), c = 6.5, up = i ? b.segs[i - 1] : null;
+        const tz = side / n * (0.5 + i * 0.13) - (up ? up.vz * 0.015 : 0) + Math.sin(p.time * 8 + i * 0.8 + b.side) * 0.015 * (0.3 + wind);
+        const tx = back / n * (0.6 + i * 0.12) - (up ? up.vx * 0.02 : 0);   // lower links bend more, so the plait curves
+        sg.vz += ((tz - sg.az) * k - sg.vz * c) * dt; sg.az += sg.vz * dt;
+        if (sg.az * b.side < -0.035) { sg.az = -0.035 * b.side; sg.vz = 0; }   // never swing in through the shoulder
+        sg.vx += ((tx - sg.ax) * k - sg.vx * c) * dt; sg.ax += sg.vx * dt;
+        sg.g.rotation.z = sg.az; sg.g.rotation.x = sg.ax;
+      });
+    }
   };
 
   // Full racer model. Hierarchy: root(yaw/pitch) > body(roll/spin/bob) > board + rider
@@ -616,7 +656,109 @@
       faceMesh.material = mat; faceMesh.castShadow = false; faceMesh.renderOrder = 2;
       head.userData.face = { mat, open, shut };
     }
+    const braid = rigHangingHair(src, head);
+    head.userData.braids = braid ? [braid] : null;
     return { rider, legs: find('Legs'), upper, head, arms: [find('ArmR'), find('ArmL')], hipY: upper.position.y };
+  }
+
+  // A long braid or ponytail sculpted into a Blender head's hair mesh gets a chain of bones at load time, so it swings
+  // like the code-built braids (PB.animateRider drives the bones). Nothing is needed in Blender: the hanging part is
+  // found by tracing up from the hair's lowest point, and only what hangs below the rest of the hair moves.
+  const rigCache = new WeakMap();   // geometry -> { pts (head-local joints), skinIndex, skinWeight }
+  function rigHangingHair(src, head) {
+    src.updateMatrixWorld(true);
+    const toModel = new THREE.Matrix4().copy(src.matrixWorld).invert();
+    const modelOf = o => new THREE.Matrix4().multiplyMatrices(toModel, o.matrixWorld);
+    const H = new THREE.Box3().setFromObject(src).getSize(new V3()).y / src.scale.y;   // model height, model units
+    // the hair: the mesh under Head (not the face or skin) that reaches lowest
+    let hair = null;
+    head.traverse(o => {
+      if (!o.isMesh || o.isSkinnedMesh || /^(Face|HeadSkin)/i.test(o.name)) return;
+      const m = modelOf(o), p = o.geometry.attributes.position, v = new V3();
+      let lo = Infinity;
+      for (let i = 0; i < p.count; i++) lo = Math.min(lo, v.fromBufferAttribute(p, i).applyMatrix4(m).y);
+      if (!hair || lo < hair.lo) hair = { o, m, lo };
+    });
+    if (!hair) return null;
+    const mesh = hair.o, geo = mesh.geometry;
+    let rig = rigCache.get(geo);
+    if (rig === undefined) { rig = traceHair(geo, hair.m, H, modelOf(head)); rigCache.set(geo, rig); }
+    if (!rig) return null;
+    if (!geo.attributes.skinIndex) { geo.setAttribute('skinIndex', rig.skinIndex); geo.setAttribute('skinWeight', rig.skinWeight); }
+    // bones live under Head so the braid follows it; bone 0 is a fixed anchor for everything that does not hang
+    const anchor = new THREE.Bone(); anchor.name = 'HairAnchor'; head.add(anchor);
+    const bones = [anchor], segs = [];
+    let parent = anchor, prev = new V3();
+    rig.pts.forEach((pt, i) => {
+      const b = new THREE.Bone(); b.name = 'HairBraid' + i;
+      b.position.copy(pt).sub(prev); prev = pt; parent.add(b); parent = b; bones.push(b);
+      if (i < rig.pts.length - 1) segs.push({ g: b, ax: 0, az: 0, vx: 0, vz: 0 });
+    });
+    const skinned = new THREE.SkinnedMesh(geo, mesh.material);
+    skinned.name = mesh.name; skinned.castShadow = mesh.castShadow; skinned.renderOrder = mesh.renderOrder;
+    skinned.position.copy(mesh.position); skinned.quaternion.copy(mesh.quaternion); skinned.scale.copy(mesh.scale);
+    mesh.parent.add(skinned); mesh.parent.remove(mesh);
+    skinned.frustumCulled = false;   // the swinging tip can leave the rest-pose bounds
+    src.updateMatrixWorld(true);
+    skinned.bind(new THREE.Skeleton(bones));
+    return { side: Math.sign(rig.pts[0].x) || 1, segs };
+  }
+
+  // geometry + its model-space matrix -> joints (in Head space) and skin attributes, or null when nothing hangs
+  function traceHair(geo, toModel, H, headToModel) {
+    const p = geo.attributes.position, n = p.count, P = new Float32Array(n * 3), v = new V3();
+    let tip = 0;
+    for (let i = 0; i < n; i++) { v.fromBufferAttribute(p, i).applyMatrix4(toModel); v.toArray(P, i * 3); if (v.y < P[tip * 3 + 1]) tip = i; }
+    // walk up from the tip in thin slices, following the centre of the strand
+    const step = 0.025 * H, R = 0.07 * H, trace = [];
+    let cx = P[tip * 3], cz = P[tip * 3 + 2], y = P[tip * 3 + 1];
+    for (let k = 0; k < 60; k++, y += step) {
+      let sx = 0, sz = 0, m = 0;
+      for (let i = 0; i < n; i++) {
+        const py = P[i * 3 + 1]; if (py < y || py >= y + step) continue;
+        const dx = P[i * 3] - cx, dz = P[i * 3 + 2] - cz; if (dx * dx + dz * dz > R * R) continue;
+        sx += P[i * 3]; sz += P[i * 3 + 2]; m++;
+      }
+      if (!m) break;
+      cx = sx / m; cz = sz / m; trace.push([cx, y + step / 2, cz]);
+    }
+    // the rest of the hair: anything off the strand's path. The strand only swings below where that ends.
+    const near = (x, py, z) => trace.some(t => Math.abs(t[1] - py) < step && (x - t[0]) ** 2 + (z - t[2]) ** 2 < R * R);
+    let rootY = Infinity;
+    for (let i = 0; i < n; i++) if (!near(P[i * 3], P[i * 3 + 1], P[i * 3 + 2])) rootY = Math.min(rootY, P[i * 3 + 1]);
+    const path = trace.filter(t => t[1] < rootY).reverse();   // root -> tip
+    if (path.length < 4) return null;
+    const tipPt = [P[tip * 3], P[tip * 3 + 1], P[tip * 3 + 2]];
+    path.unshift([path[0][0], rootY, path[0][2]]); path.push(tipPt);
+    // resample to evenly spaced joints along the strand
+    const len = [0]; for (let i = 1; i < path.length; i++) len.push(len[i - 1] + Math.hypot(...[0, 1, 2].map(k => path[i][k] - path[i - 1][k])));
+    const total = len[len.length - 1];
+    if (total < 0.12 * H) return null;   // too short to be worth swinging
+    const N = 5, joints = [];
+    for (let j = 0; j <= N; j++) {
+      const s = total * j / N; let i = 1; while (i < path.length - 1 && len[i] < s) i++;
+      const f = (s - len[i - 1]) / Math.max(1e-6, len[i] - len[i - 1]);
+      joints.push(new V3().fromArray(path[i - 1]).lerp(new V3().fromArray(path[i]), Math.min(1, f)));
+    }
+    // skin: hanging vertices blend between the two joints around them (bone k+1 pivots at joint k); the rest -> anchor
+    const skinIndex = new Uint16Array(n * 4), skinWeight = new Float32Array(n * 4), seg = new V3(), d = new V3();
+    for (let i = 0; i < n; i++) {
+      if (P[i * 3 + 1] >= rootY) { skinWeight[i * 4] = 1; continue; }
+      v.fromArray(P, i * 3);
+      let best = 0, bestD = Infinity, bestT = 0;
+      for (let j = 0; j < N; j++) {
+        seg.subVectors(joints[j + 1], joints[j]); d.subVectors(v, joints[j]);
+        const t = Math.max(0, Math.min(1, d.dot(seg) / seg.lengthSq())), dist = d.addScaledVector(seg, -t).lengthSq();
+        if (dist < bestD) { bestD = dist; best = j; bestT = t; }
+      }
+      const s = best + bestT - 0.5;   // influence centred on each segment's middle
+      const a = Math.max(0, Math.min(N - 1, Math.floor(s))), b = Math.min(N - 1, a + 1), f = Math.max(0, Math.min(1, s - a));
+      skinIndex.set([a + 1, b + 1, 0, 0], i * 4);
+      skinWeight.set(a === b ? [1, 0, 0, 0] : [1 - f, f, 0, 0], i * 4);
+    }
+    const fromModel = new THREE.Matrix4().copy(headToModel).invert();
+    return { pts: joints.map(j => j.applyMatrix4(fromModel)),
+      skinIndex: new THREE.Uint16BufferAttribute(skinIndex, 4), skinWeight: new THREE.Float32BufferAttribute(skinWeight, 4) };
   }
 
   PB.buildRacerModel = function (def) {
@@ -640,6 +782,7 @@
     board.flames.forEach(f => { keep.add(f.outer); keep.add(f.core); });
     PB.optimize.mergeRigid(root, keep);
     return { root, body, rider: r.rider, legs: r.legs, upper: r.upper, head: r.head, arms: r.arms, hair: r.head.userData.sway,
+      braids: r.head.userData.braids || null,
       hipY: r.hipY == null ? HIP_Y : r.hipY,
       board: board.group, flames: board.flames, hover: board.hover, shield,
       face: r.head.userData.face || null,
