@@ -351,18 +351,21 @@
     g.computeVertexNormals();
     return g;
   }
-  // A small five-fingered hand at the end of an arm group (arm hangs along -Y, +Z is the rider's front):
-  // a flat palm, four fingers fanned front-to-back, and a thumb pointing forward.
-  const fingerGeo = (r, len) => new THREE.CapsuleGeometry(r, len, 3, 8);
+  // A small five-fingered hand at the end of an arm group (arm hangs along -Y, +Z is the rider's front).
+  // The palm is a full rounded pad; every finger starts up inside it (so there's no gap at the knuckles, even at the
+  // edges where the palm curves away), fanned a little front-to-back; the thumb grows from the palm's lower front.
+  const fingerGeo = (r, len) => new THREE.CapsuleGeometry(r, len, 4, 10);
+  const PALM = [0.056, 0.082, 0.082];   // palm half-sizes (x thick, y long, z wide)
   function buildHand(skinM, arm, y0) {
     y0 = y0 == null ? -0.47 : y0;
-    const palm = mesh(sphere(1, 12, 10), skinM, 0, y0, 0, arm); palm.scale.set(0.058, 0.08, 0.072);
-    [[-0.05, 0.044], [-0.017, 0.058], [0.017, 0.056], [0.05, 0.042]].forEach(([z, len]) => {   // little finger at the back
-      const f = mesh(fingerGeo(0.0165, len), skinM, 0, y0 - 0.07 - len / 2, z * 1.1, arm);
-      f.rotation.x = z * 3.4;   // fan out a little
+    const palm = mesh(sphere(1, 16, 12), skinM, 0, y0, 0, arm); palm.scale.set(...PALM);
+    const root = y0 - 0.035;   // finger roots, well inside the palm
+    [[-0.051, 0.066], [-0.017, 0.086], [0.017, 0.082], [0.051, 0.07]].forEach(([z, len]) => {   // little finger at the back
+      const f = mesh(fingerGeo(0.0175, len), skinM, 0, root - len / 2, z, arm);
+      f.rotation.x = z * 2.4;   // fan out a little
     });
-    const thumb = mesh(fingerGeo(0.02, 0.042), skinM, 0.008, y0 - 0.01, 0.07, arm);
-    thumb.rotation.x = -1.0;
+    const thumb = mesh(fingerGeo(0.021, 0.05), skinM, 0.012, y0 - 0.035, 0.058, arm);
+    thumb.rotation.set(-0.6, 0, 0.22);   // forward and down, a little toward the palm
     return palm;
   }
   PB.buildHand = buildHand;
