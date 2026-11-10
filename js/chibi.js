@@ -641,8 +641,17 @@
     const find = name => src.getObjectByName(name) || new THREE.Object3D();   // missing part: animate a dummy
     const upper = find('Upper');
     const head = find('Head');
+    // a "Hair" mesh that covers the head is a whole hairdo (e.g. a sculpted wig), not a lock that swings from its root:
+    // it belongs to the head (re-attached there, keeping its place, if it was made outside Head) and does not sway
+    const wigs = new Set();
+    src.updateMatrixWorld(true);
+    const headCentre = new THREE.Box3();
+    head.traverse(o => { if (o.isMesh && !/^Hair/i.test(o.name)) headCentre.expandByObject(o); });
+    const hc = headCentre.isEmpty() ? head.getWorldPosition(new V3()) : headCentre.getCenter(new V3());
+    src.traverse(o => { if (o.isMesh && /^Hair/i.test(o.name) && new THREE.Box3().setFromObject(o).containsPoint(hc)) wigs.add(o); });
+    wigs.forEach(o => { let p = o.parent; while (p && p !== head) p = p.parent; if (!p) head.attach(o); });
     const hair = [];
-    src.traverse(o => { if (/^Hair/i.test(o.name)) hair.push({ g: o, side: Math.sign(o.position.x), w: 1, z: o.rotation.z, x: o.rotation.x }); });
+    src.traverse(o => { if (/^Hair/i.test(o.name) && !wigs.has(o)) hair.push({ g: o, side: Math.sign(o.position.x), w: 1, z: o.rotation.z, x: o.rotation.x }); });
     head.userData.sway = hair;
     head.userData.face = null;
     // a mesh named "Face" over the head: the game paints the face onto it and blinks by swapping to a closed frame
