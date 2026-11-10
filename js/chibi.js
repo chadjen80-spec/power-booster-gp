@@ -549,17 +549,22 @@
 
     // braids: every link springs toward a pose set by the rider's motion. Lower links are softer and are also pushed by
     // how fast the link above is swinging, so a turn starts at the root and whips down the plait, then settles.
+    // Blender hair rigged at load time uses the same springs, one chain per strand or per slice of a long hairdo
+    // (amp: how strongly it follows, phase: so neighbouring chains ripple instead of moving as one board).
     if (m.braids) for (const b of m.braids) {
-      const side = -a.lean * 0.38 - a.leanV * 0.02;   // flung outward through a turn (more while the turn changes)
-      const back = wind * 0.75 + a.air * 0.6;          // streams back at speed, lifts in the air
+      const amp = b.amp || 1, ph = (b.phase || 0) + b.side;
+      const side = (-a.lean * 0.38 - a.leanV * 0.02) * amp;   // flung outward through a turn (more while the turn changes)
+      const back = (wind * 0.75 + a.air * 0.6) * amp;          // streams back at speed, lifts in the air
       const n = b.segs.length;
       b.segs.forEach((sg, i) => {
         const k = 80 / (1 + i * 0.5), c = 6.5, up = i ? b.segs[i - 1] : null;
-        const tz = side / n * (0.5 + i * 0.13) - (up ? up.vz * 0.015 : 0) + Math.sin(p.time * 8 + i * 0.8 + b.side) * 0.015 * (0.3 + wind);
-        const tx = back / n * (0.6 + i * 0.12) - (up ? up.vx * 0.02 : 0);   // lower links bend more, so the plait curves
+        const flutter = 0.015 * (0.3 + wind * 1.6);   // ripples more the faster you go
+        const tz = side / n * (0.5 + i * 0.13) - (up ? up.vz * 0.015 : 0) + Math.sin(p.time * 8 + i * 0.8 + ph) * flutter;
+        const tx = back / n * (0.6 + i * 0.12) - (up ? up.vx * 0.02 : 0) + Math.sin(p.time * 6.3 + i * 0.9 + ph * 1.7) * flutter * wind;   // lower links bend more, so it curves
         sg.vz += ((tz - sg.az) * k - sg.vz * c) * dt; sg.az += sg.vz * dt;
-        if (sg.az * b.side < -0.035) { sg.az = -0.035 * b.side; sg.vz = 0; }   // never swing in through the shoulder
+        if (b.side && sg.az * b.side < -0.035) { sg.az = -0.035 * b.side; sg.vz = 0; }   // never swing in through the shoulder
         sg.vx += ((tx - sg.ax) * k - sg.vx * c) * dt; sg.ax += sg.vx * dt;
+        if (sg.ax < -0.03) { sg.ax = -0.03; sg.vx = 0; }   // nor forward into the back
         sg.g.rotation.z = sg.az; sg.g.rotation.x = sg.ax;
       });
     }
@@ -665,15 +670,16 @@
       faceMesh.material = mat; faceMesh.castShadow = false; faceMesh.renderOrder = 2;
       head.userData.face = { mat, open, shut };
     }
-    const braid = rigHangingHair(src, head);
-    head.userData.braids = braid ? [braid] : null;
+    head.userData.braids = rigHangingHair(src, head);
     return { rider, legs: find('Legs'), upper, head, arms: [find('ArmR'), find('ArmL')], hipY: upper.position.y };
   }
 
-  // A long braid or ponytail sculpted into a Blender head's hair mesh gets a chain of bones at load time, so it swings
-  // like the code-built braids (PB.animateRider drives the bones). Nothing is needed in Blender: the hanging part is
-  // found by tracing up from the hair's lowest point, and only what hangs below the rest of the hair moves.
-  const rigCache = new WeakMap();   // geometry -> { pts (head-local joints), skinIndex, skinWeight }
+  // Blender hair moves at load time, with nothing needed in Blender: the hair mesh under Head (a sculpted wig, say) is
+  // turned into a skinned mesh with chains of bones that PB.animateRider swings with the same springs as the code-built
+  // braids. A long braid or ponytail (one strand hanging below the rest of the hair) gets a chain of its own; the rest
+  // of the hair below mid-head gets six chains spaced around the head, each vertex blended between the two nearest,
+  // so long hair flows as one sheet.
+  const rigCache = new WeakMap();   // geometry -> rig data (joints in Head space, skin attributes, chains) or null
   function rigHangingHair(src, head) {
     src.updateMatrixWorld(true);
     const toModel = new THREE.Matrix4().copy(src.matrixWorld).invert();
@@ -681,8 +687,10 @@
     const H = new THREE.Box3().setFromObject(src).getSize(new V3()).y / src.scale.y;   // model height, model units
     // the hair: the mesh under Head (not the face or skin) that reaches lowest
     let hair = null;
+    const skull = new THREE.Box3();
     head.traverse(o => {
-      if (!o.isMesh || o.isSkinnedMesh || /^(Face|HeadSkin)/i.test(o.name)) return;
+      if (!o.isMesh || o.isSkinnedMesh) return;
+      if (/^(Face|HeadSkin)/i.test(o.name)) { skull.expandByObject(o); return; }
       const m = modelOf(o), p = o.geometry.attributes.position, v = new V3();
       let lo = Infinity;
       for (let i = 0; i < p.count; i++) lo = Math.min(lo, v.fromBufferAttribute(p, i).applyMatrix4(m).y);
@@ -691,82 +699,135 @@
     if (!hair) return null;
     const mesh = hair.o, geo = mesh.geometry;
     let rig = rigCache.get(geo);
-    if (rig === undefined) { rig = traceHair(geo, hair.m, H, modelOf(head)); rigCache.set(geo, rig); }
+    if (rig === undefined) {
+      const hc = skull.isEmpty() ? head.getWorldPosition(new V3()) : skull.getCenter(new V3());
+      rig = computeHairRig(geo, hair.m, H, modelOf(head), hc.applyMatrix4(toModel));
+      rigCache.set(geo, rig);
+    }
     if (!rig) return null;
     if (!geo.attributes.skinIndex) { geo.setAttribute('skinIndex', rig.skinIndex); geo.setAttribute('skinWeight', rig.skinWeight); }
-    // bones live under Head so the braid follows it; bone 0 is a fixed anchor for everything that does not hang
-    const anchor = new THREE.Bone(); anchor.name = 'HairAnchor'; head.add(anchor);
-    const bones = [anchor], segs = [];
-    let parent = anchor, prev = new V3();
-    rig.pts.forEach((pt, i) => {
-      const b = new THREE.Bone(); b.name = 'HairBraid' + i;
-      b.position.copy(pt).sub(prev); prev = pt; parent.add(b); parent = b; bones.push(b);
-      if (i < rig.pts.length - 1) segs.push({ g: b, ax: 0, az: 0, vx: 0, vz: 0 });
+    // bones live under Head so the hair follows it; bone 0 is a fixed anchor for everything that does not move
+    const bones = rig.joints.map((j, i) => { const b = new THREE.Bone(); b.name = 'HairBone' + i; return b; });
+    rig.joints.forEach((j, i) => {
+      const par = rig.parent[i];
+      (par < 0 ? head : bones[par]).add(bones[i]);
+      bones[i].position.copy(j); if (par >= 0) bones[i].position.sub(rig.joints[par]);
     });
     const skinned = new THREE.SkinnedMesh(geo, mesh.material);
     skinned.name = mesh.name; skinned.castShadow = mesh.castShadow; skinned.renderOrder = mesh.renderOrder;
     skinned.position.copy(mesh.position); skinned.quaternion.copy(mesh.quaternion); skinned.scale.copy(mesh.scale);
     mesh.parent.add(skinned); mesh.parent.remove(mesh);
-    skinned.frustumCulled = false;   // the swinging tip can leave the rest-pose bounds
+    skinned.frustumCulled = false;   // swinging hair can leave the rest-pose bounds
     src.updateMatrixWorld(true);
     skinned.bind(new THREE.Skeleton(bones));
-    return { side: Math.sign(rig.pts[0].x) || 1, segs };
+    return rig.chains.map(c => ({ side: c.side, phase: c.phase, amp: c.amp, segs: c.bones.map(i => ({ g: bones[i], ax: 0, az: 0, vx: 0, vz: 0 })) }));
   }
 
-  // geometry + its model-space matrix -> joints (in Head space) and skin attributes, or null when nothing hangs
-  function traceHair(geo, toModel, H, headToModel) {
+  // geometry + matrices -> { joints (Head space), parent, chains, skinIndex, skinWeight } or null when nothing can swing
+  function computeHairRig(geo, toModel, H, headToModel, hc) {
     const p = geo.attributes.position, n = p.count, P = new Float32Array(n * 3), v = new V3();
     let tip = 0;
     for (let i = 0; i < n; i++) { v.fromBufferAttribute(p, i).applyMatrix4(toModel); v.toArray(P, i * 3); if (v.y < P[tip * 3 + 1]) tip = i; }
-    // walk up from the tip in thin slices, following the centre of the strand
+    const X = i => P[i * 3], Y = i => P[i * 3 + 1], Z = i => P[i * 3 + 2];
+    const joints = [new V3()], parent = [-1], chains = [];   // joint 0: the anchor (Head origin, never moves)
+    const infl = Array.from({ length: n }, () => []);         // per vertex: [bone, weight] pairs
+
+    // 1. a single strand (braid / ponytail) hanging below the rest of the hair: walk up from the lowest point in thin
+    //    slices, following the centre of the strand, until the rest of the hair begins
     const step = 0.025 * H, R = 0.07 * H, trace = [];
-    let cx = P[tip * 3], cz = P[tip * 3 + 2], y = P[tip * 3 + 1];
-    for (let k = 0; k < 60; k++, y += step) {
+    let cx = X(tip), cz = Z(tip);
+    for (let k = 0, y = Y(tip); k < 60; k++, y += step) {
       let sx = 0, sz = 0, m = 0;
       for (let i = 0; i < n; i++) {
-        const py = P[i * 3 + 1]; if (py < y || py >= y + step) continue;
-        const dx = P[i * 3] - cx, dz = P[i * 3 + 2] - cz; if (dx * dx + dz * dz > R * R) continue;
-        sx += P[i * 3]; sz += P[i * 3 + 2]; m++;
+        if (Y(i) < y || Y(i) >= y + step || (X(i) - cx) ** 2 + (Z(i) - cz) ** 2 > R * R) continue;
+        sx += X(i); sz += Z(i); m++;
       }
       if (!m) break;
       cx = sx / m; cz = sz / m; trace.push([cx, y + step / 2, cz]);
     }
-    // the rest of the hair: anything off the strand's path. The strand only swings below where that ends.
-    const near = (x, py, z) => trace.some(t => Math.abs(t[1] - py) < step && (x - t[0]) ** 2 + (z - t[2]) ** 2 < R * R);
-    let rootY = Infinity;
-    for (let i = 0; i < n; i++) if (!near(P[i * 3], P[i * 3 + 1], P[i * 3 + 2])) rootY = Math.min(rootY, P[i * 3 + 1]);
-    const path = trace.filter(t => t[1] < rootY).reverse();   // root -> tip
-    if (path.length < 4) return null;
-    const tipPt = [P[tip * 3], P[tip * 3 + 1], P[tip * 3 + 2]];
-    path.unshift([path[0][0], rootY, path[0][2]]); path.push(tipPt);
-    // resample to evenly spaced joints along the strand
-    const len = [0]; for (let i = 1; i < path.length; i++) len.push(len[i - 1] + Math.hypot(...[0, 1, 2].map(k => path[i][k] - path[i - 1][k])));
-    const total = len[len.length - 1];
-    if (total < 0.12 * H) return null;   // too short to be worth swinging
-    const N = 5, joints = [];
-    for (let j = 0; j <= N; j++) {
-      const s = total * j / N; let i = 1; while (i < path.length - 1 && len[i] < s) i++;
-      const f = (s - len[i - 1]) / Math.max(1e-6, len[i] - len[i - 1]);
-      joints.push(new V3().fromArray(path[i - 1]).lerp(new V3().fromArray(path[i]), Math.min(1, f)));
-    }
-    // skin: hanging vertices blend between the two joints around them (bone k+1 pivots at joint k); the rest -> anchor
-    const skinIndex = new Uint16Array(n * 4), skinWeight = new Float32Array(n * 4), seg = new V3(), d = new V3();
-    for (let i = 0; i < n; i++) {
-      if (P[i * 3 + 1] >= rootY) { skinWeight[i * 4] = 1; continue; }
-      v.fromArray(P, i * 3);
-      let best = 0, bestD = Infinity, bestT = 0;
-      for (let j = 0; j < N; j++) {
-        seg.subVectors(joints[j + 1], joints[j]); d.subVectors(v, joints[j]);
-        const t = Math.max(0, Math.min(1, d.dot(seg) / seg.lengthSq())), dist = d.addScaledVector(seg, -t).lengthSq();
-        if (dist < bestD) { bestD = dist; best = j; bestT = t; }
+    const onStrand = i => trace.some(t => Math.abs(t[1] - Y(i)) < step && (X(i) - t[0]) ** 2 + (Z(i) - t[2]) ** 2 < R * R);
+    let strandY = Infinity;
+    for (let i = 0; i < n; i++) if (!onStrand(i)) strandY = Math.min(strandY, Y(i));
+    const path = trace.filter(t => t[1] < strandY).reverse();   // root -> tip
+    let strand = false;
+    if (path.length >= 4) {
+      path.unshift([path[0][0], strandY, path[0][2]]); path.push([X(tip), Y(tip), Z(tip)]);
+      const len = [0]; for (let i = 1; i < path.length; i++) len.push(len[i - 1] + Math.hypot(...[0, 1, 2].map(k => path[i][k] - path[i - 1][k])));
+      const total = len[len.length - 1];
+      if (total > 0.12 * H) {
+        strand = true;
+        const N = 5, pts = [];
+        for (let j = 0; j <= N; j++) {
+          const s = total * j / N; let i = 1; while (i < path.length - 1 && len[i] < s) i++;
+          const f = (s - len[i - 1]) / Math.max(1e-6, len[i] - len[i - 1]);
+          pts.push(new V3().fromArray(path[i - 1]).lerp(new V3().fromArray(path[i]), Math.min(1, f)));
+        }
+        const first = joints.length;
+        pts.forEach((pt, j) => { joints.push(pt); parent.push(j ? joints.length - 2 : 0); });
+        chains.push({ side: Math.sign(pts[0].x - hc.x) || 1, phase: 0, amp: 1, bones: [0, 1, 2, 3, 4].map(j => first + j) });
+        const seg = new V3(), d = new V3();
+        for (let i = 0; i < n; i++) {
+          if (Y(i) >= strandY) continue;
+          v.set(X(i), Y(i), Z(i));
+          let best = 0, bestD = Infinity, bestT = 0;
+          for (let j = 0; j < N; j++) {
+            seg.subVectors(pts[j + 1], pts[j]); d.subVectors(v, pts[j]);
+            const t = Math.max(0, Math.min(1, d.dot(seg) / seg.lengthSq())), dist = d.addScaledVector(seg, -t).lengthSq();
+            if (dist < bestD) { bestD = dist; best = j; bestT = t; }
+          }
+          const s = best + bestT - 0.5, a = Math.max(0, Math.min(N - 1, Math.floor(s))), b = Math.min(N - 1, a + 1), f = Math.max(0, Math.min(1, s - a));
+          infl[i].push([first + a, a === b ? 1 : 1 - f]); if (a !== b) infl[i].push([first + b, f]);
+        }
       }
-      const s = best + bestT - 0.5;   // influence centred on each segment's middle
-      const a = Math.max(0, Math.min(N - 1, Math.floor(s))), b = Math.min(N - 1, a + 1), f = Math.max(0, Math.min(1, s - a));
-      skinIndex.set([a + 1, b + 1, 0, 0], i * 4);
-      skinWeight.set(a === b ? [1, 0, 0, 0] : [1 - f, f, 0, 0], i * 4);
+    }
+
+    // 2. the rest of the hair below mid-head: six vertical chains around the head
+    const K = 6, N = 4, rootY = hc.y - 0.02 * H;
+    const free = i => Y(i) < rootY && !infl[i].length && !(strand && onStrand(i));   // the strand's upper part stays put
+    const sectorOf = i => { const a = Math.atan2(X(i) - hc.x, Z(i) - hc.z); return ((a / (2 * Math.PI)) * K + K) % K; };
+    const low = new Array(K).fill(rootY), cxk = new Array(K).fill(0), czk = new Array(K).fill(0), cnt = new Array(K).fill(0);
+    let anyFree = 0;
+    for (let i = 0; i < n; i++) {
+      if (!free(i)) continue;
+      anyFree++;
+      const k = Math.round(sectorOf(i)) % K;
+      low[k] = Math.min(low[k], Y(i)); cxk[k] += X(i); czk[k] += Z(i); cnt[k]++;
+    }
+    const deepest = Math.min(...low);
+    if (anyFree && rootY - deepest > 0.08 * H) {
+      const segLen = [], first = [];
+      for (let k = 0; k < K; k++) {
+        const a = k / K * 2 * Math.PI, r = 0.12 * H;
+        const jx = cnt[k] ? cxk[k] / cnt[k] : hc.x + Math.sin(a) * r, jz = cnt[k] ? czk[k] / cnt[k] : hc.z + Math.cos(a) * r;
+        const L = Math.max(rootY - low[k], 0.1 * H);
+        segLen.push(L / N); first.push(joints.length);
+        for (let j = 0; j <= N; j++) { joints.push(new V3(jx, rootY - L * j / N, jz)); parent.push(j ? joints.length - 2 : 0); }
+        const side = Math.abs(jx - hc.x) > 0.06 * H ? Math.sign(jx - hc.x) : 0;
+        chains.push({ side, phase: k * 1.3, amp: 0.8, bones: [0, 1, 2, 3].map(j => first[k] + j) });
+      }
+      for (let i = 0; i < n; i++) {
+        if (!free(i)) continue;
+        const u = sectorOf(i), k0 = Math.floor(u) % K, k1 = (k0 + 1) % K, fu = u - Math.floor(u);
+        const depth = rootY - Y(i);
+        const m = Math.min(1, depth / (0.06 * H));   // ease in just below the pivot line
+        for (const [k, wk] of [[k0, 1 - fu], [k1, fu]]) {
+          const s = depth / segLen[k] - 0.5, a = Math.max(0, Math.min(N - 1, Math.floor(s))), b = Math.min(N - 1, a + 1), f = Math.max(0, Math.min(1, s - a));
+          infl[i].push([first[k] + a, wk * m * (a === b ? 1 : 1 - f)]); if (a !== b) infl[i].push([first[k] + b, wk * m * f]);
+        }
+        if (m < 1) infl[i].push([0, 1 - m]);
+      }
+    }
+    if (!chains.length) return null;
+    // keep the four strongest influences per vertex; everything else rides the anchor
+    const skinIndex = new Uint16Array(n * 4), skinWeight = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      const w = infl[i].filter(e => e[1] > 1e-4).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      const sum = w.reduce((s, e) => s + e[1], 0);
+      if (!sum) { skinWeight[i * 4] = 1; continue; }
+      w.forEach((e, j) => { skinIndex[i * 4 + j] = e[0]; skinWeight[i * 4 + j] = e[1] / sum; });
     }
     const fromModel = new THREE.Matrix4().copy(headToModel).invert();
-    return { pts: joints.map(j => j.applyMatrix4(fromModel)),
+    return { joints: joints.map(j => j.applyMatrix4(fromModel)), parent, chains,
       skinIndex: new THREE.Uint16BufferAttribute(skinIndex, 4), skinWeight: new THREE.Float32BufferAttribute(skinWeight, 4) };
   }
 
