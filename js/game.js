@@ -30,6 +30,7 @@
   const veiled = r => r.stage === 4 && r.def.ult === 'veil';
   const CORK_TURNS = 3, CORK_PIVOT = 1.6;   // Wind Glide roll: full turns, and pivot height (mid-rider) above the board
   const GAUGE_REGEN = 7;                         // gauge % per second
+  const EMP_DELAY = 10;                          // seconds an EMP counts down over each target's head before it strikes
   const BOOST_MIN = 20;                          // gauge % needed for a short Lv.1-only boost
   const GRAVITY = 34;
   const MINE_SIZE = 2.7, MINE_HIT = 3.5;   // TNT crate edge and pick-up radius
@@ -61,7 +62,7 @@
     mine: { icon: '🧨', img: tntIcon(), name: 'กับระเบิด TNT' },
     shield: { icon: '🛡️', name: 'โล่พลังงาน' },
     turbo: { icon: '🔥', name: 'เทอร์โบ' },
-    emp: { icon: '⚡', name: 'EMP ช็อกทุกคันข้างหน้า' },
+    emp: { icon: '⚡', name: 'EMP ช็อกทุกคัน (นับถอยหลัง 10 วิ)' },
   };
   const ITEM_TABLE = [
     { mine: 4, shield: 3, bomb: 2, turbo: 1 },                         // 1st-2nd
@@ -1510,14 +1511,11 @@
     } else if (ev.it === 'turbo') {
       r.turbo = 1.8; if (r.isPlayer) audio.sfx('turbo');
     } else if (ev.it === 'emp') {
-      race.racers.forEach(q => {
-        if (q === r || q.progressTotal() <= r.progressTotal()) return;
-        if (!veiled(q)) empStrike(q);   // everyone sees the bolt; the hit itself lands on q's own browser
-        q.takeHit('shock');
-      });
-      race.flash = Math.max(race.flash, 0.3);
-      audio.sfx('boom');
-      if (!r.isPlayer) bigMsg(`⚡ ${r.name} ใช้ EMP!`, true);
+      // every other racer gets a countdown over their head; the bolt lands when it runs out (see updateEmp)
+      race.racers.forEach(q => { if (q !== r && !q.finished) armEmp(q); });
+      race.flash = Math.max(race.flash, 0.15);
+      audio.sfx('zap');
+      bigMsg(r.isPlayer ? `⚡ EMP! ทุกคนโดนใน ${EMP_DELAY} วิ` : `⚡ ${r.name} ใช้ EMP! อีก ${EMP_DELAY} วิ`, true);
     }
   }
 
@@ -1617,6 +1615,56 @@
         life: 0.5, size: [0.7, 0.1], drag: 2, jitter: 14 });
     }
   }
+  // EMP countdown: a glowing number over each target's head, 10 -> 1, red and pulsing for the last 3 seconds.
+  // Runs on every browser (the item event is replayed everywhere); the hit itself only lands on the target's own one,
+  // and a shield up at the moment of the strike blocks it.
+  function armEmp(q) {
+    if (q.emp) return;   // already counting down: keep the earlier one
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const tex = new THREE.CanvasTexture(c);
+    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false }));
+    tag.renderOrder = 5; tag.scale.setScalar(2); tag.position.y = q.ctrl === 'remote' ? 5.8 : 4.6;   // above the head (and a name tag)
+    q.model.root.add(tag);
+    q.emp = { t: EMP_DELAY, tag, c, tex, shown: 0 };
+  }
+  function drawEmpTag(e, n) {
+    const x = e.c.getContext('2d'), urgent = n <= 3;
+    x.clearRect(0, 0, 128, 128);
+    x.fillStyle = urgent ? 'rgba(120,10,20,0.85)' : 'rgba(10,24,70,0.85)';
+    x.strokeStyle = urgent ? '#ff4a4a' : '#5ab8ff'; x.lineWidth = 8;
+    x.beginPath(); x.arc(64, 64, 52, 0, Math.PI * 2); x.fill(); x.stroke();
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.font = '28px sans-serif'; x.fillText('⚡', 64, 26);
+    x.font = 'bold 60px Kanit, sans-serif'; x.fillStyle = '#fff';
+    x.fillText(String(n), 64, 76);
+    e.tex.needsUpdate = true;
+  }
+  function clearEmp(q) {
+    const e = q.emp; if (!e) return;
+    e.tag.parent && e.tag.parent.remove(e.tag);
+    e.tag.material.dispose(); e.tex.dispose();
+    q.emp = null;
+  }
+  function updateEmp(dt) {
+    for (const q of race.racers) {
+      const e = q.emp; if (!e) continue;
+      if (q.finished) { clearEmp(q); continue; }
+      e.t -= dt;
+      const n = Math.max(1, Math.ceil(e.t));
+      if (n !== e.shown) { e.shown = n; drawEmpTag(e, n); if (q.isPlayer) audio.sfx(n <= 3 ? 'count' : 'tick'); }
+      const beat = 1 - (e.t - Math.floor(e.t));   // 0 -> 1 through each second
+      e.tag.scale.setScalar(2 * (n <= 3 ? 1 + 0.25 * Math.max(0, 1 - beat * 3) : 1));
+      e.tag.visible = !veiled(q);
+      if (e.t <= 0) {
+        clearEmp(q);
+        if (!veiled(q)) empStrike(q);   // everyone sees the bolt; the hit itself lands on q's own browser
+        q.takeHit('shock');
+        if (q.isPlayer) race.flash = Math.max(race.flash, 0.3);
+        if (near(q)) audio.sfx('boom');
+      }
+    }
+  }
+
   // small arcs and sparks around a shocked rider
   function crackle(q) {
     if (q.pos.distanceTo(camera.position) > 120 || Math.random() > 0.35) return;
@@ -1703,6 +1751,7 @@
 
   function updateWorldObjects(dt) {
     const track = race.track, N = track.N;
+    updateEmp(dt);
     // item boxes
     for (const b of race.boxes) {
       if (!b.active) {
