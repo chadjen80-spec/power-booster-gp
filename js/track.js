@@ -480,16 +480,19 @@
     // arrows drawn pointing down: the plane's +V ends up facing backwards along the track
     for (let k = 0; k < 3; k++) { const y = 16 + k * 36; pc.beginPath(); pc.moveTo(8, y); pc.lineTo(32, y + 24); pc.lineTo(56, y); pc.lineTo(56, y + 12); pc.lineTo(32, y + 36); pc.lineTo(8, y + 12); pc.fill(); }
     const padTex = new THREE.CanvasTexture(padCanvas);
+    padTex.wrapS = THREE.RepeatWrapping; padTex.repeat.x = 2;   // two rows of arrows across each wide pad
     const pads = [];
     for (const f of [0.27, 0.52, 0.76]) {
       const i = Math.floor(f * N), s = samples[i];
-      for (const lat of [-W * 0.4, W * 0.4]) {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(5, 9), new THREE.MeshBasicMaterial({ map: padTex, transparent: true, opacity: 0.95 }));
+      // two wide pads side by side, covering most of the road (a narrow gap down the middle)
+      const padW = W * 0.4;
+      for (const lat of [-W * 0.25, W * 0.25]) {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(padW, 12), new THREE.MeshBasicMaterial({ map: padTex, transparent: true, opacity: 0.95 }));
         m.rotation.order = 'YXZ';
         m.rotation.set(-Math.PI / 2 + Math.asin(s.t.y), Math.atan2(s.flat.x, s.flat.z), 0);
         m.position.copy(s.p).addScaledVector(s.n, lat).add(new V3(0, 0.08, 0));
         group.add(m);
-        pads.push({ idx: i, lat, mesh: m });
+        pads.push({ idx: i, lat, half: padW / 2, mesh: m });
       }
     }
 

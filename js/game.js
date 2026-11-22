@@ -872,7 +872,7 @@
       if (this.stage > 0 || this.gauge < BOOST_MIN || this.spin > 0) return false;
       const full = this.gauge >= 100;
       this.stage = 1;
-      this.boostMax = full ? 3 : 1;
+      this.boostMax = full ? 3 : 1; this.freeBoost = false;
       this.stageDur = full ? STAGE_TIME : Math.max(0.6, STAGE_TIME * this.gauge / 100);
       this.stageTimer = this.stageDur;
       this.gauge = full ? 100 : 0;
@@ -880,10 +880,10 @@
       return true;
     }
 
-    // perfect start: one stage of Booster Lv.2 straight off the line; it does not use or empty the gauge
+    // perfect start: one stage of Booster Lv.3 straight off the line; it does not use or empty the gauge
     startBoost() {
-      this.stage = 2; this.boostMax = 2; this.stageTimer = this.stageDur = STAGE_TIME;
-      if (this.isPlayer) { audio.sfx('boost2'); bigMsg('PERFECT START! BOOST Lv.2', true); race.shake = 0.3; stat(this, 'perfectstart'); }
+      this.stage = 3; this.boostMax = 3; this.freeBoost = true; this.stageTimer = this.stageDur = STAGE_TIME;
+      if (this.isPlayer) { audio.sfx('boost3'); bigMsg('PERFECT START! BOOST Lv.3', true); race.shake = 0.4; stat(this, 'perfectstart'); }
     }
 
     // ultimate meter: fills from driving well (drifts, air time, items) and faster for racers further back
@@ -961,7 +961,7 @@
       }
       if (kind === 'shock') { this.shock = 2.5; this.speed *= 0.55; this.hurtCharge(12); }
       else { this.spin = 1.4; this.speed *= 0.25; this.hurtCharge(15); }
-      if (this.stage > 0) { this.stage = 0; if (this.boostMax === 3) this.gauge = 30; }   // a full boost keeps a little charge
+      if (this.stage > 0) { this.stage = 0; if (this.boostMax === 3 && !this.freeBoost) this.gauge = 30; this.freeBoost = false; }   // a full boost keeps a little charge
       this.drifting = false; this.turbo = 0;
       if (this.isPlayer) { audio.sfx('hit'); race.shake = 0.6; bigMsg(kind === 'shock' ? 'โดนช็อก!' : 'โดนโจมตี!', true); }
     }
@@ -1099,9 +1099,9 @@
             this.stage++; this.stageTimer = this.stageDur = STAGE_TIME;
             if (this.stage === 3) stat(this, 'maxboost');
             if (this.isPlayer) { audio.sfx('boost' + this.stage); bigMsg(this.stage === 3 ? 'MAX BOOST!!' : 'BOOST Lv.' + this.stage, true); race.shake = 0.3; }
-          } else if (this.stage === 3 && this.boostMax === 3 && this.def.ult && this.ult >= 100) {
+          } else if (this.stage === 3 && this.boostMax === 3 && !this.freeBoost && this.def.ult && this.ult >= 100) {
             this.startUltimate();
-          } else { this.stage = 0; if (this.boostMax !== 2) this.gauge = 0; }   // the start boost keeps the gauge
+          } else { this.stage = 0; if (!this.freeBoost) this.gauge = 0; this.freeBoost = false; }   // the start boost keeps the gauge
         }
       } else if (canControl) {
         this.gauge = Math.min(100, this.gauge + GAUGE_REGEN * dt);
@@ -1730,8 +1730,8 @@
     for (const p of track.pads) {
       for (const r of race.racers) {
         if (!r.auth) continue;
-        const d = (r.idx - p.idx + N) % N;
-        if (d < 3 && Math.abs(track.lateral(r.pos, r.idx) - p.lat) < 2.8 && r.spin <= 0) {
+        const d = (r.idx - p.idx + N) % N;   // samples are 2.5 apart: the 12-long pad spans about +-2.4 samples
+        if ((d <= 2 || d >= N - 2) && Math.abs(track.lateral(r.pos, r.idx) - p.lat) < p.half + 0.4 && r.spin <= 0) {
           if (r.turbo < 0.5 && r.isPlayer) audio.sfx('turbo');
           r.turbo = Math.max(r.turbo, 1.0);
         }
