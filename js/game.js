@@ -59,7 +59,7 @@
   const ITEMS = {
     missile: { icon: '🚀', name: 'มิสไซล์ติดตาม' },
     bomb: { icon: '💣', name: 'ระเบิดขว้าง' },
-    mine: { icon: '🧨', img: tntIcon(), name: 'กับระเบิด TNT' },
+    mine: { icon: '🧨', img: tntIcon(), name: 'กับระเบิด TNT (กันมิสไซล์/ระเบิดขว้างได้)' },
     shield: { icon: '🛡️', name: 'โล่พลังงาน' },
     turbo: { icon: '🔥', name: 'เทอร์โบ' },
     emp: { icon: '⚡', name: 'EMP ช็อกทุกคัน (นับถอยหลัง 10 วิ)' },
@@ -72,9 +72,11 @@
   // counts a player action for the daily missions (js/pass.js)
   function stat(r, k) { if (r.isPlayer && race && race.stats) race.stats[k] = (race.stats[k] || 0) + 1; }
 
-  function rollItem(place) {
+  // bot: AI racers never get EMP (it is the players' comeback item)
+  function rollItem(place, bot) {
     if (race && race.bossMode) return Math.random() < 0.55 ? 'turbo' : 'shield';
-    const t = ITEM_TABLE[place <= 2 ? 0 : place <= 5 ? 1 : 2];
+    const t = Object.assign({}, ITEM_TABLE[place <= 2 ? 0 : place <= 5 ? 1 : 2]);
+    if (bot) delete t.emp;
     let sum = 0; for (const k in t) sum += t[k];
     let r = Math.random() * sum;
     for (const k in t) { r -= t[k]; if (r <= 0) return k; }
@@ -451,7 +453,7 @@
       if (r && !r.auth) applyItem(r, m);
     } else if (m.e === 'boom') {
       const p = race.projectiles.find(q => q.id === m.pid);
-      if (p) { p.pos.set(m.x, m.y, m.z); detonate(p); }
+      if (p) { p.pos.set(m.x, m.y, m.z); detonate(p, !!m.ab); }
     } else if (m.e === 'ult') {
       const r = race.racers.find(q => q.netId === m.r), tg = race.racers.find(q => q.netId === m.tg) || null;
       if (r && !r.auth) lightningStrike(r, tg);
@@ -972,7 +974,7 @@
       this.gauge = Math.min(100, this.gauge + 12);
       stat(this, 'boxes');
       if (this.item || this.rolling > 0) return;
-      this.pendingItem = rollItem(this.place);
+      this.pendingItem = rollItem(this.place, this.ctrl === 'bot');
       this.rolling = this.isPlayer ? 1.2 : 0.5;
       if (this.isPlayer) audio.sfx('pickup');
     }
@@ -1722,12 +1724,13 @@
     race.mines.push({ id: pid, owner, pos, mesh: g, crateMat, beacon, ring, immune: 1.0, idx, lat: race.track.lateral(pos, idx), life: 40, t: Math.random() });
   }
 
-  // projectile blows up: visuals everywhere, bomb splash hits whichever racers this browser simulates
-  function detonate(p) {
+  // projectile blows up: visuals everywhere, bomb splash hits whichever racers this browser simulates.
+  // absorbed: it ran into a TNT crate, which takes the blast (no bomb splash, so a crate dropped behind you shields you)
+  function detonate(p, absorbed) {
     if (p.dead) return;
     p.dead = true;
-    explode(p.pos.clone(), p.type === 'bomb' ? 9 : 4);
-    if (p.type === 'bomb') race.racers.forEach(r => { if (r !== p.owner && r.pos.distanceTo(p.pos) < 9) r.takeHit('spin'); });   // the thrower is spared
+    explode(p.pos.clone(), absorbed ? 5 : p.type === 'bomb' ? 9 : 4, absorbed ? 0xff5020 : undefined);
+    if (p.type === 'bomb' && !absorbed) race.racers.forEach(r => { if (r !== p.owner && r.pos.distanceTo(p.pos) < 9) r.takeHit('spin'); });   // the thrower is spared
   }
 
   function explode(pos, radius, color) {
@@ -1811,6 +1814,18 @@
       p.trail.update(true, back, new V3(Math.cos(p.heading), 0, -Math.sin(p.heading)), 0.35, c => c.setHex(0xff9a40), race.time);
       // collisions: only against racers this browser simulates; it then tells everyone where the shot blew up
       if (p.life <= 0 || Math.abs(track.lateral(p.pos, p.idx)) > track.W + 1) { detonate(p); continue; }
+      // a TNT crate in the way stops missiles and thrown bombs: both blow up together. Decided by the shooter's browser.
+      if (p.owner.auth) {
+        const hitR = MINE_HIT + (p.type === 'bomb' ? 0.7 : 0.3);
+        const m = race.mines.find(m => !m.dead && m.owner !== p.owner && Math.hypot(m.pos.x - p.pos.x, m.pos.z - p.pos.z) < hitR && Math.abs(m.pos.y - p.pos.y) < 3.5);
+        if (m) {
+          m.dead = true; detonate(p, true);
+          netEvent({ e: 'boom', pid: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, ab: 1 });
+          netEvent({ e: 'mine', pid: m.id });
+          if (p.owner.isPlayer || m.owner.isPlayer) bigMsg(m.owner.isPlayer ? '🧨 TNT กันไว้ได้!' : '🧨 ชน TNT!', true);
+          continue;
+        }
+      }
       for (const r of race.racers) {
         if (!r.auth || r === p.owner) continue;   // your own shots never hit you
         if (r.pos.distanceTo(p.pos) < (p.type === 'missile' ? 3 : 4.2)) {
