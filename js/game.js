@@ -12,9 +12,9 @@
   const STAGE_TIME = 3;                          // seconds per booster stage
   const BOOST_MUL = [1, 1.25, 1.5, 1.8, 1.8];    // top-speed multiplier per booster stage (Lv.4 keeps Lv.3 speed)
   const BOOST_COLORS = [0, 0x22e6ff, 0xff3ad0, 0xffffff, 0xffffff];
-  // Lv.4 ultimates (character def.ult). Each gets the same budget: 2.5s, no extra speed, power comes from the effect.
+  // Lv.4 ultimates (character def.ult). Each gets the same budget: 5s, no extra speed, power comes from the effect.
   // Lv.4 follows Lv.3 by itself only when the separate ultimate meter is full; the meter fills faster further back.
-  const ULT_TIME = 2.5;
+  const ULT_TIME = 5;
   const ULTS = {
     flame: { name: 'ทางไฟ', desc: 'ทิ้งไฟไว้ข้างหลัง ใครวิ่งทับจะช้าลง (โล่กันได้)', color: 0xff5a10 },
     glide: { name: 'ร่อนลม', desc: 'กระโดดลอยร่อนข้ามช่องว่างและสิ่งกีดขวาง', color: 0x5aff8a },
@@ -32,6 +32,7 @@
   const GAUGE_REGEN = 7;                         // gauge % per second
   // race start: riders wait on the road beside their boards, then sprint and leap on at GO
   const START_SPOT = new V3(-1.5, 0, -0.5), START_TAKEOFF = new V3(-0.75, 0, -0.2), START_RUN = 0.45, START_JUMP = 0.35;
+  const _ground = new V3(), _spot = new V3(), _takeoff = new V3();
   const EMP_DELAY = 10;                          // seconds an EMP counts down over each target's head before it strikes
   const BOOST_MIN = 20;                          // gauge % needed for a short Lv.1-only boost
   const GRAVITY = 34;
@@ -182,7 +183,7 @@
   }
 
   // ---------------- game state ----------------
-  const state = { screen: 'title', charIdx: 0, trackIdx: 0, diff: 1, mode: 'solo' };
+  const state = { screen: 'title', charIdx: 0, trackIdx: 0, diff: 1, items: true, mode: 'solo' };
   let race = null;
 
   function show(id) {
@@ -272,8 +273,9 @@
   });
   $('on-code').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-join').click(); });
   PB.TRACKS.forEach((t, i) => $('lb-track').insertAdjacentHTML('beforeend', `<option value="${i}">${t.name} — ${t.th}</option>`));
-  const sendSettings = () => PB.net.send({ t: 'settings', track: +$('lb-track').value, diff: +$('lb-diff').value });
+  const sendSettings = () => PB.net.send({ t: 'settings', track: +$('lb-track').value, diff: +$('lb-diff').value, items: +$('lb-items').value });
   $('lb-track').addEventListener('change', sendSettings);
+  $('lb-items').addEventListener('change', sendSettings);
   $('lb-diff').addEventListener('change', sendSettings);
   $('lb-start').addEventListener('click', () => PB.net.send({ t: 'start' }));
   $('lb-char').addEventListener('click', () => goScreen('char'));
@@ -295,8 +297,8 @@
     });
     for (let i = room.players.length; i < 8; i++) slots.push('<li class="empty">🤖 บอท AI</li>');
     $('lb-players').innerHTML = slots.join('');
-    $('lb-track').value = room.track; $('lb-diff').value = room.diff;
-    $('lb-track').disabled = $('lb-diff').disabled = !host;
+    $('lb-track').value = room.track; $('lb-diff').value = room.diff; $('lb-items').value = room.items === false ? '0' : '1';
+    $('lb-track').disabled = $('lb-diff').disabled = $('lb-items').disabled = !host;
     $('lb-start').classList.toggle('hidden', !host);
     $('lb-start').disabled = room.racing;
     $('lb-wait').textContent = room.racing ? 'ห้องนี้กำลังแข่งอยู่... รอหัวห้องพากลับล็อบบี้' : host ? 'คุณเป็นหัวห้อง เลือกด่านแล้วกดเริ่มแข่งได้เลย' : 'รอหัวห้องกดเริ่มแข่ง...';
@@ -432,7 +434,7 @@
     else $('on-msg').textContent = m.msg;
   });
   net.on('start', m => {
-    state.trackIdx = m.track; state.diff = m.diff;
+    state.trackIdx = m.track; state.diff = m.diff; state.items = m.items !== false;
     togglePause(false);
     $('scr-results').classList.remove('show');
     rk.queued = false; rk.result = null;
@@ -717,6 +719,14 @@
       });
       grid.appendChild(d);
     });
+    // items on / off: off means no item boxes on the track (boost pads and the Booster still work)
+    document.querySelectorAll('[data-items]').forEach(b => {
+      b.classList.toggle('sel', (b.dataset.items === '1') === state.items);
+      b.addEventListener('click', () => {
+        state.items = b.dataset.items === '1'; audio.sfx('select');
+        document.querySelectorAll('[data-items]').forEach(e => e.classList.toggle('sel', e === b));
+      });
+    });
     document.querySelectorAll('[data-diff]').forEach(b => {
       b.classList.toggle('sel', +b.dataset.diff === state.diff);
       b.addEventListener('click', () => {
@@ -893,13 +903,17 @@
         return { mode: 'ride' };
       }
       this.onBoard = false;
-      if (t < 0) { rd.position.copy(START_SPOT); rd.rotation.y = 0; return { mode: 'stand' }; }
+      // the road, in the rider's parent space (the racer's origin floats above it and bobs, and the model is scaled)
+      m.root.updateMatrixWorld(true);
+      const road = rd.parent.worldToLocal(_ground.set(this.pos.x, race.track.heightAt(this.pos, this.idx) + 0.03, this.pos.z)).y;
+      const spot = _spot.copy(START_SPOT).setY(road), takeoff = _takeoff.copy(START_TAKEOFF).setY(road);
+      if (t < 0) { rd.position.copy(spot); rd.rotation.y = 0; return { mode: 'stand' }; }
       if (t < START_RUN) {   // sprint alongside, angling in toward the board
-        rd.position.lerpVectors(START_SPOT, START_TAKEOFF, t / START_RUN); rd.rotation.y = 0.35;
+        rd.position.lerpVectors(spot, takeoff, t / START_RUN); rd.rotation.y = 0.35;
         return { mode: 'run', runT: t };
       }
       const k = (t - START_RUN) / START_JUMP;   // leap: an arc from the take-off spot onto the board
-      rd.position.lerpVectors(START_TAKEOFF, home, k); rd.position.y += Math.sin(k * Math.PI) * 0.9;
+      rd.position.lerpVectors(takeoff, home, k); rd.position.y += Math.sin(k * Math.PI) * 0.9;
       rd.rotation.y = 0.35 + (m.riderYaw - 0.35) * k;
       return { mode: 'jump', jumpK: k };
     }
@@ -1997,9 +2011,12 @@
     race.player.gauge = 50;
     if (opts.boss) setupBoss();
 
-    // item boxes
+    // item boxes (none when items are switched off; the Boss Stage always has its shields and turbos)
+    race.items = !!opts.boss || state.items !== false;
+    document.querySelector('.hud-item').classList.toggle('hidden', !race.items);
+    document.querySelector('.t-item').classList.toggle('hidden', !race.items);
     const mat = itemBoxMaterial();
-    for (const spot of track.boxSpots) {
+    if (race.items) for (const spot of track.boxSpots) {
       const s = track.samples[spot.idx];
       const m = new THREE.Mesh(boxGeo, mat);
       m.position.copy(s.p).addScaledVector(s.n, spot.lat);

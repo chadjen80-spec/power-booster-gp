@@ -69,7 +69,7 @@ function broadcast(room, msg, except) {
 const LAN = Object.values(os.networkInterfaces()).flat().filter(a => a && a.family === 'IPv4' && !a.internal).map(a => `${a.address}:${PORT}`);
 
 function roomInfo(room) {
-  return { t: 'room', code: room.code, host: room.host, racing: room.racing, track: room.track, diff: room.diff, lan: LAN,
+  return { t: 'room', code: room.code, host: room.host, racing: room.racing, track: room.track, diff: room.diff, items: room.items !== false, lan: LAN,
     players: room.players.map(p => ({ id: p.id, name: p.name, char: p.char, skin: p.skin })) };
 }
 function cleanName(n) { return String(n || '').replace(/[<>&"]/g, '').trim().slice(0, 14) || 'Player'; }
@@ -104,7 +104,7 @@ function startRace(room) {
     grid.push({ id: 'bot' + b++, name: null, char: c, bot: true });
   }
   for (let i = grid.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [grid[i], grid[j]] = [grid[j], grid[i]]; }
-  broadcast(room, { t: 'start', track: room.track, diff: room.diff, grid, host: room.host, ranked: !!room.ranked });
+  broadcast(room, { t: 'start', track: room.track, diff: room.diff, items: room.items !== false, grid, host: room.host, ranked: !!room.ranked });
   broadcast(room, roomInfo(room));
 }
 
@@ -241,6 +241,7 @@ wss.on('connection', ws => {
         if (!room || room.ranked || room.host !== ws.id) return;
         room.track = Math.max(0, Math.min(MAX_TRACK, m.track | 0));
         room.diff = Math.max(0, Math.min(2, m.diff | 0));
+        if (m.items !== undefined) room.items = !!m.items;   // ranked rooms never get here: items stay on
         broadcast(room, roomInfo(room));
         break;
       }
