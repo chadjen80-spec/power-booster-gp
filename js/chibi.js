@@ -363,6 +363,8 @@
   // ---------- body: slim chibi figure, about 2.5 heads tall ----------
   // Posable parts: legs (squash to crouch, pivot at the feet) and upper body (pivot at the hips)
   const HIP_Y = 0.85;
+  const LEG = { x: 0.13, hip: 0.78, a: 0.33, b: 0.33 };   // hip joint height, thigh and shin lengths (ankle at 0.12)
+  const ELBOW_Y = -0.27;                                  // elbow, down the arm from the shoulder
   // cone-ish frill with a wavy hem (skirts, tops)
   function ruffle(rTop, rBottom, h, waves, amp) {
     const g = new THREE.CylinderGeometry(rTop, rBottom, h, 64, 3, true), p = g.attributes.position;
@@ -406,16 +408,26 @@
     upper.add(body);
     const shirtM = soft(def.shirt, 0.55, { side: THREE.DoubleSide }), pantsM = soft(def.pants, 0.55, { side: THREE.DoubleSide }),
       skinM = soft(def.skin, 0.75), shoeM = soft(def.shoes, 0.4), accM = soft(def.accent, 0.45);
+    // legs: pelvis > thigh (hip joint) > shin (knee) > foot (ankle); PB.animateRider poses them with IK
+    const pelvis = new THREE.Group(); pelvis.name = 'Pelvis'; pelvis.position.y = LEG.hip; legs.add(pelvis);
+    const legRig = [];
     for (const s of [-1, 1]) {
-      const leg = mesh(capsule(0.12, 0.46), skinM, s * 0.13, 0.46, 0, legs); leg.scale.set(1, 1, 0.95);
-      const thigh = mesh(sphere(0.135, 14, 10), skinM, s * 0.13, 0.64, 0, legs); thigh.scale.y = 1.25;
-      const shoe = mesh(sphere(1, 14, 10), shoeM, s * 0.13, 0.08, 0.04, legs); shoe.scale.set(0.13, 0.11, 0.2);
+      const side = s < 0 ? 'R' : 'L';
+      const thigh = new THREE.Group(); thigh.name = 'Thigh' + side; thigh.position.x = s * LEG.x; pelvis.add(thigh);
+      const shin = new THREE.Group(); shin.name = 'Shin' + side; shin.position.y = -LEG.a; thigh.add(shin);
+      const foot = new THREE.Group(); foot.name = 'Foot' + side; foot.position.y = -LEG.b; shin.add(foot);
+      const th = mesh(sphere(0.135, 14, 10), skinM, 0, -0.14, 0, thigh); th.scale.y = 1.25;
+      mesh(capsule(0.12, 0.2), skinM, 0, -0.2, 0, thigh);
+      mesh(sphere(0.117, 14, 10), skinM, 0, 0, 0, shin);   // knee
+      mesh(capsule(0.112, 0.2), skinM, 0, -0.16, 0, shin);
+      const shoe = mesh(sphere(1, 14, 10), shoeM, 0, -0.04, 0.04, foot); shoe.scale.set(0.13, 0.11, 0.2);
+      if (!def.skirt) mesh(capsule(0.145, 0.16), pantsM, 0, -0.05, 0, thigh);   // shorts leg covers the thigh
+      legRig.push({ s, thigh, shin, foot, a: LEG.a, b: LEG.b });
     }
     if (def.skirt) {   // two-tier ruffled skirt
       mesh(ruffle(0.25, 0.4, 0.2, 9, 0.12), pantsM, 0, 0.9, 0, body);
       mesh(ruffle(0.33, 0.5, 0.18, 11, 0.14), pantsM, 0, 0.76, 0, body);
     } else {
-      for (const s of [-1, 1]) mesh(capsule(0.145, 0.16), pantsM, s * 0.125, 0.73, 0, legs);   // shorts legs cover the thighs
       const hips = mesh(capsule(0.2, 0.06), pantsM, 0, 0.9, 0, body); hips.scale.set(1.15, 0.8, 0.85);   // slim seat, no bulge
       mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 18), accM, 0, 0.97, 0, body);   // belt
     }
@@ -430,14 +442,17 @@
       d.scale.set(0.17, 0.13, 0.15);
     }
     // arms out for balance
-    const arms = [];
+    const arms = [], fores = [];
     for (const s of [-1, 1]) {
       const sh = new THREE.Group(); sh.name = s < 0 ? 'ArmR' : 'ArmL'; sh.position.set(s * 0.31, 1.34, 0); sh.rotation.z = s * 1.05; body.add(sh);
       mesh(sphere(0.105, 14, 10), shirtM, 0, 0, 0, sh);   // shoulder joint: round, so it looks right at any arm angle
       mesh(capsule(0.095, 0.14), shirtM, 0, -0.12, 0, sh);   // sleeve
-      mesh(capsule(0.07, 0.2), skinM, 0, -0.3, 0, sh);
-      buildHand(skinM, sh);
-      arms.push(sh);
+      mesh(capsule(0.07, 0.12), skinM, 0, -0.2, 0, sh);       // upper arm
+      const fore = new THREE.Group(); fore.name = 'Forearm' + (s < 0 ? 'R' : 'L'); fore.position.y = ELBOW_Y; sh.add(fore);
+      mesh(sphere(0.07, 12, 8), skinM, 0, 0, 0, fore);        // elbow
+      mesh(capsule(0.066, 0.13), skinM, 0, -0.1, 0, fore);
+      buildHand(skinM, fore, -0.47 - ELBOW_Y);
+      arms.push(sh); fores.push(fore);
     }
     if (def.wings) {
       const shape = new THREE.Shape();
@@ -454,7 +469,7 @@
     head.position.y = 2.23;
     head.scale.set(0.8, 0.76, 0.77);   // head-space is built at radius 0.9; this makes it ~0.7
     body.add(head);
-    return { rider, legs, upper, head, arms };
+    return { rider, legs, upper, head, arms, rig: { pelvis, legs: legRig, fores, hip: LEG.hip } };
   }
 
   // ---------- jet surfboard ----------
@@ -502,7 +517,217 @@
     return { group: g, flames, hover };
   }
 
-  // Procedural riding pose. p: { dt, steer (-1..1, + = left), drift (-1/0/1), stage, speed, time }
+  // ---------- Blender bodies: bones for knees and elbows ----------
+  // The game's Blender templates keep the code-built body layout: one "Legs" object holding both legs (skin, shoes,
+  // shorts) and "ArmL"/"ArmR" objects that each hold a whole arm. At load time the legs get pelvis > thigh > shin > foot
+  // bones and each arm a forearm bone, and those meshes are skinned to them by where each vertex sits, so knees and elbows
+  // bend smoothly. Joint heights are read off the Legs bounds, scaled from the code-built layout (LEG, ELBOW_Y).
+  const bodyCache = new WeakMap();   // geometry -> { skinIndex, skinWeight } (clones share geometry)
+  const smooth01 = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  function skinTo(mesh, bones, weigh) {
+    // weigh(v in the bones' parent space) -> [[boneIndex, weight], ...]; returns the SkinnedMesh that replaced `mesh`
+    const geo = mesh.geometry;
+    let skin = bodyCache.get(geo);
+    if (!skin) {
+      const par = bones[0].parent;
+      par.updateMatrixWorld(true);
+      const m = new THREE.Matrix4().copy(par.matrixWorld).invert().multiply(mesh.matrixWorld);
+      const p = geo.attributes.position, n = p.count, v = new V3();
+      const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) {
+        const w = weigh(v.fromBufferAttribute(p, i).applyMatrix4(m)).filter(e => e[1] > 1e-4).sort((x, y) => y[1] - x[1]).slice(0, 4);
+        const sum = w.reduce((t, e) => t + e[1], 0) || 1;
+        w.forEach((e, j) => { si[i * 4 + j] = e[0]; sw[i * 4 + j] = e[1] / sum; });
+      }
+      skin = { skinIndex: new THREE.Uint16BufferAttribute(si, 4), skinWeight: new THREE.Float32BufferAttribute(sw, 4) };
+      bodyCache.set(geo, skin);
+    }
+    if (!geo.attributes.skinIndex) { geo.setAttribute('skinIndex', skin.skinIndex); geo.setAttribute('skinWeight', skin.skinWeight); }
+    const sk = new THREE.SkinnedMesh(geo, mesh.material);
+    sk.name = mesh.name; sk.castShadow = mesh.castShadow; sk.renderOrder = mesh.renderOrder; sk.frustumCulled = false;
+    sk.position.copy(mesh.position); sk.quaternion.copy(mesh.quaternion); sk.scale.copy(mesh.scale);
+    mesh.parent.add(sk); mesh.parent.remove(mesh);
+    return sk;
+  }
+  function rigGltfBody(src, legsNode, armNodes) {
+    src.updateMatrixWorld(true);
+    // --- legs ---
+    const legMeshes = [];
+    legsNode.traverse(o => { if (o.isMesh && !o.isSkinnedMesh) legMeshes.push(o); });
+    if (!legMeshes.length) return null;
+    const inv = new THREE.Matrix4().copy(legsNode.matrixWorld).invert(), box = new THREE.Box3(), v = new V3();
+    for (const o of legMeshes) {
+      const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld), p = o.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) box.expandByPoint(v.fromBufferAttribute(p, i).applyMatrix4(m));
+    }
+    const k = (box.max.x - box.min.x) / 2 / 0.265;   // code-built legs are 0.265 wide either side
+    const J = y => box.min.y + (y + 0.03) * k;      // code-built soles sit at -0.03
+    const hip = J(LEG.hip), knee = J(LEG.hip - LEG.a), ankle = J(LEG.hip - LEG.a - LEG.b), hx = LEG.x * k;
+    const pelvis = new THREE.Bone(); pelvis.name = 'Pelvis'; pelvis.position.y = hip; legsNode.add(pelvis);
+    const bones = [pelvis], legRig = [];
+    for (const s of [-1, 1]) {
+      const side = s < 0 ? 'R' : 'L';
+      const thigh = new THREE.Bone(); thigh.name = 'Thigh' + side; thigh.position.x = s * hx; pelvis.add(thigh);
+      const shin = new THREE.Bone(); shin.name = 'Shin' + side; shin.position.y = knee - hip; thigh.add(shin);
+      const foot = new THREE.Bone(); foot.name = 'Foot' + side; foot.position.y = ankle - knee; shin.add(foot);
+      bones.push(thigh, shin, foot);
+      legRig.push({ s, thigh, shin, foot, a: hip - knee, b: knee - ankle });
+    }
+    const bk = 0.05 * k, ba = 0.035 * k;   // blend half-widths at the knee and ankle
+    const legW = (y, t0) => {   // weights down one leg; t0 = index of its thigh bone
+      const toThigh = smooth01(hip + 0.02 * k, hip - 0.07 * k, y);
+      const toShin = smooth01(knee + bk, knee - bk, y), toFoot = smooth01(ankle + ba, ankle - ba, y);
+      return [[0, 1 - toThigh], [t0, toThigh * (1 - toShin)], [t0 + 1, toThigh * toShin * (1 - toFoot)], [t0 + 2, toThigh * toShin * toFoot]];
+    };
+    const legsSkel = [];
+    for (const o of legMeshes) {
+      legsSkel.push(skinTo(o, bones, q => {
+        const fl = smooth01(-0.045 * k, 0.045 * k, q.x);   // share of the character's left leg (+X)
+        const out = [];
+        legW(q.y, 1).forEach(([b, w]) => out.push([b, w * (1 - fl)]));
+        legW(q.y, 4).forEach(([b, w]) => out.push([b, w * fl]));
+        const merged = new Map(); out.forEach(([b, w]) => merged.set(b, (merged.get(b) || 0) + w));
+        return [...merged];
+      }));
+    }
+    legsNode.updateMatrixWorld(true);
+    const legSkeleton = new THREE.Skeleton(bones);
+    legsSkel.forEach(sk => sk.bind(legSkeleton));
+    // --- arms: the arm object itself turns at the shoulder; a forearm bone bends at the elbow ---
+    const fores = armNodes.map(arm => {
+      const meshes = [];
+      arm.children.forEach(o => { if (o.isMesh && !o.isSkinnedMesh) meshes.push(o); });
+      if (!meshes.length) return new THREE.Object3D();
+      const ainv = new THREE.Matrix4().copy(arm.matrixWorld).invert();
+      const lowOf = o => { const m = new THREE.Matrix4().multiplyMatrices(ainv, o.matrixWorld), p = o.geometry.attributes.position; let lo = 0;
+        for (let i = 0; i < p.count; i++) lo = Math.min(lo, v.fromBufferAttribute(p, i).applyMatrix4(m).y); return lo; };
+      const lows = meshes.map(lowOf), bottom = Math.min(...lows);
+      const elbow = bottom * (-ELBOW_Y / 0.59);   // code-built arms reach 0.59 down, elbow at 0.27
+      const root = new THREE.Bone(); root.name = arm.name + 'Root'; arm.add(root);
+      const fore = new THREE.Bone(); fore.name = 'Forearm' + arm.name.slice(-1); fore.position.y = elbow; root.add(fore);
+      const eb = 0.04 * k;
+      const skinned = [];
+      meshes.forEach((o, i) => {
+        if (lows[i] > elbow + eb) return;   // the sleeve stays with the upper arm as it is
+        skinned.push(skinTo(o, [root, fore], q => { const f = smooth01(elbow + eb, elbow - eb, q.y); return [[0, 1 - f], [1, f]]; }));
+      });
+      arm.updateMatrixWorld(true);
+      const skel = new THREE.Skeleton([root, fore]);
+      skinned.forEach(sk => sk.bind(skel));
+      arm.children.slice().forEach(o => { if (/^Fingers/i.test(o.name)) fore.attach(o); });   // separate finger pieces ride the forearm
+      return fore;
+    });
+    return { pelvis, legs: legRig, fores, hip };
+  }
+
+  // ---------- poses: leg IK ----------
+  // A bone whose local -Y should point along `down`, turned so its local +Z faces `fwd` as closely as possible.
+  const IK = { d: new V3(), p: new V3(), t: new V3(), k: new V3(), s: new V3(), x: new V3(), y: new V3(), z: new V3(), m: new THREE.Matrix4(),
+    q: new THREE.Quaternion(), T: new V3(), pole: new V3() };
+  function aimBone(down, fwd, out) {
+    const y = IK.y.copy(down).negate().normalize();
+    const z = IK.z.copy(fwd).addScaledVector(y, -fwd.dot(y)).normalize();
+    const x = IK.x.crossVectors(y, z);
+    return out.setFromRotationMatrix(IK.m.makeBasis(x, y, z));
+  }
+  // Two-bone leg IK in the pelvis's space: put the ankle on T, the knee bending toward `pole`, the foot kept level.
+  function solveLeg(leg, T, pole) {
+    const H = leg.thigh.position, a = leg.a, b = leg.b;
+    const D = IK.d.subVectors(T, H);
+    const d = Math.min(Math.max(D.length(), Math.abs(a - b) + 1e-3), a + b - 1e-3);
+    D.normalize();
+    const cosA = (a * a + d * d - b * b) / (2 * a * d), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+    const P = IK.p.copy(pole).addScaledVector(D, -pole.dot(D)).normalize();
+    const thighDir = IK.t.copy(D).multiplyScalar(cosA).addScaledVector(P, sinA);
+    const knee = IK.k.copy(H).addScaledVector(thighDir, a);
+    const shinDir = IK.s.copy(H).addScaledVector(D, d).sub(knee).normalize();
+    aimBone(thighDir, P, leg.thigh.quaternion);
+    aimBone(shinDir, P, IK.q);                                            // the shin, in pelvis space
+    leg.foot.quaternion.copy(IK.q).invert();                              // level foot (pelvis space = identity)
+    leg.shin.quaternion.copy(leg.thigh.quaternion).invert().multiply(IK.q);
+  }
+
+  // Whole-body poses on the jointed skeleton (both code-built and Blender racers). Feet are placed by IK, so knees
+  // really bend; distances are in leg lengths (Lg) so one set of numbers fits every body. Targets ease in, so switching
+  // pose blends instead of snapping.
+  //   stand: relaxed, breathing, weight shifting from foot to foot (menus)
+  //   ride:  surfer's crouch on the board - feet apart and staggered (left foot forward), knees bent and turned out,
+  //          weight shifted into turns, lower when boosting, tucked in the air
+  //   run:   sprinting (p.runT = seconds into the run)
+  //   jump:  leaping onto the board (p.jumpK 0..1), knees tucked, landing in the riding stance
+  const RIDE_FEET = [[-0.28, -0.2], [0.28, 0.22]];   // [x, z] of the right (back) and left (front) foot, in Lg
+  function poseTargets(m, p, a, mode) {
+    const R = m.rig, leg0 = R.legs[0], Lg = leg0.a + leg0.b, hx = Math.abs(leg0.thigh.position.x) / Lg;
+    const t = p.time, c = a.crouch, lean = a.lean, T = { Lg };
+    const Lt = Math.max(lean, 0), Rt = Math.max(-lean, 0);   // left / right turn amounts
+    if (mode === 'stand') {
+      const br = Math.sin(t * 1.7), sw = Math.sin(t * 0.6);
+      T.drop = 0.025 + 0.006 * br; T.px = sw * 0.035; T.pz = 0;
+      T.feet = [[-(hx + 0.03), 0, -0.04], [hx + 0.03, 0, 0.04]];
+      T.pole = 0.2;
+      T.torso = [0.03 + br * 0.015, Math.sin(t * 0.37) * 0.1, -sw * 0.04];
+      T.head = [0.02, Math.sin(t * 0.45) * 0.3, sw * 0.05];
+      T.arms = [[0.05 * br, 0, -0.2 - 0.02 * br], [0.05 * br, 0, 0.2 + 0.02 * br]];
+      T.elbow = [0.18, 0.18];
+    } else if (mode === 'run') {
+      const ph = p.runT * Math.PI * 2 * 2.6;
+      T.feet = [-1, 1].map(s => { const q = ph + (s > 0 ? 0 : Math.PI); return [s * hx, Math.max(0, Math.cos(q)) * 0.32, Math.sin(q) * 0.38]; });
+      T.drop = 0.12 - 0.04 * Math.abs(Math.sin(ph)); T.px = 0; T.pz = 0.06;
+      T.pole = 0.15;
+      T.torso = [0.32, Math.sin(ph) * 0.2, 0];
+      T.head = [-0.22, -Math.sin(ph) * 0.15, 0];
+      // each arm swings back as the leg on its side swings forward
+      T.arms = [-1, 1].map(s => { const q = ph + (s > 0 ? 0 : Math.PI); return [Math.sin(q) * 0.9, 0, s * 0.25]; });
+      T.elbow = [1.4, 1.4];
+    } else if (mode === 'jump') {
+      const k = Math.max(0, Math.min(1, p.jumpK)), tuck = Math.sin(k * Math.PI);
+      T.feet = [-1, 1].map((s, i) => [s * hx + (RIDE_FEET[i][0] - s * hx) * k, tuck * 0.42, RIDE_FEET[i][1] * k]);
+      T.drop = 0.12 + 0.08 * tuck; T.px = 0; T.pz = 0;
+      T.pole = 0.3;
+      T.torso = [0.25, 0, 0];
+      T.head = [-0.15, 0, 0];
+      T.arms = [[-0.4, 0, -1.2 - 0.6 * tuck], [-0.4, 0, 1.2 + 0.6 * tuck]];
+      T.elbow = [0.5, 0.5];
+    } else {   // ride
+      T.drop = 0.3 + 0.14 * c + 0.1 * a.air; T.px = lean * 0.08; T.pz = -0.1;   // squat, sitting back over the heels
+      T.feet = RIDE_FEET.map(([x, z]) => [x, 0, z]);
+      T.pole = 0.45;
+      T.torso = [0.3 + 0.15 * c + p.stage * 0.05, lean * 0.3, -lean * 0.3];   // chest forward over the knees
+      T.head = [-0.2 - 0.08 * c, lean * 0.3, -lean * 0.12];   // eyes up the track
+      // inner arm reaches forward and down toward the board, outer arm swings out and back for balance
+      // (kept below shoulder height so the big head never hides it)
+      const bob = Math.sin(t * 5) * 0.05, up = a.air * 0.9;
+      T.arms = [[-Rt * 0.8 + Lt * 0.6 + up * 0.3, 0, -1.05 + Rt * 0.55 - Lt * 0.45 - up - bob],
+        [-Lt * 0.8 + Rt * 0.6 + up * 0.3, 0, 1.05 - Lt * 0.55 + Rt * 0.45 + up + bob]];
+      T.elbow = [0.35 + c * 0.25 + Rt * 0.3, 0.35 + c * 0.25 + Lt * 0.3];
+    }
+    return T;
+  }
+  const lerpArr = (o, t, k) => { for (let i = 0; i < t.length; i++) { if (Array.isArray(t[i])) lerpArr(o[i], t[i], k); else o[i] += (t[i] - o[i]) * k; } };
+  const cloneArr = t => t.map(e => Array.isArray(e) ? cloneArr(e) : e);
+  function poseBody(m, p, a, mode, dt) {
+    const R = m.rig, T = poseTargets(m, p, a, mode), Lg = T.Lg;
+    const flat = [T.drop, T.px, T.pz, T.pole, T.feet, T.torso, T.head, T.arms, T.elbow];
+    if (!a.pose) a.pose = cloneArr(flat);
+    // quick follow while running (the cycle itself must not lag), gentler otherwise so pose changes blend
+    lerpArr(a.pose, flat, 1 - Math.exp(-(mode === 'run' || mode === 'jump' ? 40 : 14) * dt));
+    const [drop, px, pz, pole, feet, torso, head, arms, elbow] = a.pose;
+    R.pelvis.position.set(px * Lg, R.hip - drop * Lg, pz * Lg);
+    m.upper.position.set(px * Lg, m.hipY - drop * Lg, pz * Lg);
+    R.legs.forEach((leg, i) => {
+      const f = feet[i];
+      IK.T.set(f[0] * Lg, R.hip - Lg + f[1] * Lg, f[2] * Lg).sub(R.pelvis.position);
+      solveLeg(leg, IK.T, IK.pole.set(leg.s * pole, 0, 1));
+    });
+    m.upper.rotation.set(torso[0], torso[1], torso[2]);
+    m.head.rotation.set(head[0], head[1], head[2]);
+    m.arms[0].rotation.set(arms[0][0], arms[0][1], arms[0][2]);
+    m.arms[1].rotation.set(arms[1][0], arms[1][1], arms[1][2]);
+    R.fores.forEach((f, i) => { f.rotation.x = -elbow[i]; });
+  }
+
+  // Procedural riding pose. p: { dt, steer (-1..1, + = left), drift (-1/0/1), stage, speed, time, mode, runT, jumpK }
+  // mode: 'ride' (default), 'stand', 'run' or 'jump' (see poseTargets).
   // Springs give a small overshoot when the rider snaps from one turn into another.
   PB.animateRider = function (m, p) {
     const a = m.anim, dt = Math.min(p.dt, 0.05);
@@ -514,17 +739,17 @@
     a.crouch += (crouchT - a.crouch) * Math.min(1, 8 * dt);
     const L = Math.max(a.lean, 0), R = Math.max(-a.lean, 0);   // left / right turn amounts
 
-    // crouch on bent legs, lean and twist the upper body into the turn
-    m.legs.scale.y = 1 - a.crouch * 0.32;
-    m.upper.position.y = m.hipY * (1 - a.crouch * 0.32);
-    m.upper.rotation.set(0.12 * a.crouch + p.stage * 0.05, a.lean * 0.3, -a.lean * 0.3);
-    m.head.rotation.set(-0.08 * a.crouch, a.lean * 0.3, -a.lean * 0.12);
-    // inner arm reaches forward and down toward the board, outer arm swings out and back for balance
-    // (kept below shoulder height so the big head never hides it)
-    const bob = Math.sin(p.time * 5) * 0.05;
-    const up = a.air * 0.9;
-    m.arms[1].rotation.set(-L * 0.8 + R * 0.6 + up * 0.3, 0, 1.05 - L * 0.55 + R * 0.45 + up + bob);    // character's left arm (+X)
-    m.arms[0].rotation.set(-R * 0.8 + L * 0.6 + up * 0.3, 0, -1.05 + R * 0.55 - L * 0.45 - up - bob);   // character's right arm (-X)
+    if (m.rig) poseBody(m, p, a, p.mode || 'ride', dt);
+    else {   // a model without legs to bend: squash the legs to crouch, as before
+      m.legs.scale.y = 1 - a.crouch * 0.32;
+      m.upper.position.y = m.hipY * (1 - a.crouch * 0.32);
+      m.upper.rotation.set(0.12 * a.crouch + p.stage * 0.05, a.lean * 0.3, -a.lean * 0.3);
+      m.head.rotation.set(-0.08 * a.crouch, a.lean * 0.3, -a.lean * 0.12);
+      const bob = Math.sin(p.time * 5) * 0.05;
+      const up = a.air * 0.9;
+      m.arms[1].rotation.set(-L * 0.8 + R * 0.6 + up * 0.3, 0, 1.05 - L * 0.55 + R * 0.45 + up + bob);    // character's left arm (+X)
+      m.arms[0].rotation.set(-R * 0.8 + L * 0.6 + up * 0.3, 0, -1.05 + R * 0.55 - L * 0.45 - up - bob);   // character's right arm (-X)
+    }
     // board carves on its edge
     m.board.rotation.z = -a.lean * 0.1;
 
@@ -671,7 +896,9 @@
       head.userData.face = { mat, open, shut };
     }
     head.userData.braids = rigHangingHair(src, head);
-    return { rider, legs: find('Legs'), upper, head, arms: [find('ArmR'), find('ArmL')], hipY: upper.position.y };
+    const legsNode = find('Legs'), arms = [find('ArmR'), find('ArmL')];
+    const rig = legsNode.parent ? rigGltfBody(src, legsNode, arms) : null;
+    return { rider, legs: legsNode, upper, head, arms, rig, hipY: upper.position.y };
   }
 
   // Blender hair moves at load time, with nothing needed in Blender: the hair mesh under Head (a sculpted wig, say) is
@@ -852,7 +1079,8 @@
     board.flames.forEach(f => { keep.add(f.outer); keep.add(f.core); });
     PB.optimize.mergeRigid(root, keep);
     return { root, body, rider: r.rider, legs: r.legs, upper: r.upper, head: r.head, arms: r.arms, hair: r.head.userData.sway,
-      braids: r.head.userData.braids || null,
+      braids: r.head.userData.braids || null, rig: r.rig || null,
+      riderHome: r.rider.position.clone(), riderYaw: r.rider.rotation.y,   // where the rider stands on the board
       hipY: r.hipY == null ? HIP_Y : r.hipY,
       board: board.group, flames: board.flames, hover: board.hover, shield,
       face: r.head.userData.face || null,
