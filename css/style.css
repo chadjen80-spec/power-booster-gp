@@ -195,6 +195,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #070614; c
   text-shadow: 0 0 24px var(--pink), 0 6px 0 #2a0a4a; opacity: 0; }
 #big-msg.pop { animation: pop 1s ease-out forwards; }
 #big-msg.small { font-size: clamp(26px, 5vw, 56px); }
+#start-tip { position: absolute; left: 0; right: 0; top: 52%; text-align: center; font-family: 'Kanit', sans-serif; font-weight: 600;
+  font-size: clamp(15px, 2.4vw, 24px); color: #fff; text-shadow: 0 0 10px #ff3ad0, 0 2px 0 #2a0a4a; animation: pulse 1s infinite; pointer-events: none; }
 @keyframes pop { 0% { transform: scale(2.2); opacity: 0; } 15% { transform: scale(1); opacity: 1; } 75% { opacity: 1; } 100% { transform: scale(0.9); opacity: 0; } }
 #wrong-way { position: absolute; top: 46%; left: 0; right: 0; text-align: center; font-family: 'Orbitron', sans-serif;
   font-size: 40px; color: #ff4060; text-shadow: 0 0 12px #ff0030; animation: pulse .5s infinite; }

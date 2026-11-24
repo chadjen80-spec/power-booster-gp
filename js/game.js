@@ -36,7 +36,7 @@
   const MINE_SIZE = 2.7, MINE_HIT = 3.5;   // TNT crate edge and pick-up radius
   const BOUNCE_T = 0.6;
   const SHIELD_CHARGE = 4;   // ultimate charge for a hit the shield blocked (a real hit gives 6-15)   // seconds a hit pops the racer up into the air (visual only)
-  const START_EARLY = 0.12, START_LATE = 0.25;   // perfect-start window around GO, in seconds before / after
+  const START_EARLY = 0.3, START_LATE = 0.35;    // perfect-start window around GO, in seconds before / after
   const DIFFICULTY = [{ skill: [0.78, 0.86], rubber: 0.06, item: 0.6 }, { skill: [0.86, 0.94], rubber: 0.09, item: 1 }, { skill: [0.93, 1.0], rubber: 0.12, item: 1.4 }];
 
   // Item-slot picture of the TNT crate, matching the red box with the yellow TNT label dropped on the track
@@ -2011,6 +2011,7 @@
 
   function endRace() {
     if (!race) return;
+    $('start-tip').classList.add('hidden');
     document.body.classList.remove('boss-mode');
     audio.stopEngine();
     race.lines.dispose();
@@ -2519,6 +2520,8 @@
       race.cd -= dt;
       const now2 = Math.ceil(race.cd - 1);
       if (now2 !== before && now2 >= 1 && now2 <= 3) { bigMsg(String(now2), true); audio.sfx('count'); }
+      // reminder under the count (not in a false start, which has its own message)
+      $('start-tip').classList.toggle('hidden', race.start.state === 'early');
       // start lights: one more red per count, all green on GO
       const reds = now2 <= 3 ? 4 - Math.max(now2, 1) : 0;
       race.track.startLights.forEach((l, k) => l.material.color.setHex(race.cd <= 1 ? 0x30ff50 : k < reds && k < 3 ? 0xff2a2a : 0x2a0808));
@@ -2529,6 +2532,7 @@
       }
       if (race.cd <= 1) {
         race.phase = 'race';
+        $('start-tip').classList.add('hidden');
         bigMsg('GO!', true); audio.sfx('go');
         if (race.start.state === 'hit') { race.start.state = 'done'; race.player.startBoost(); }
         // bots get a perfect start now and then (more often on harder difficulties)
