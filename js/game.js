@@ -12,9 +12,9 @@
   const STAGE_TIME = 3;                          // seconds per booster stage
   const BOOST_MUL = [1, 1.25, 1.5, 1.8, 1.8];    // top-speed multiplier per booster stage (Lv.4 keeps Lv.3 speed)
   const BOOST_COLORS = [0, 0x22e6ff, 0xff3ad0, 0xffffff, 0xffffff];
-  // Lv.4 ultimates (character def.ult). Each gets the same budget: 5s, no extra speed, power comes from the effect.
+  // Lv.4 ultimates (character def.ult). Each gets the same budget: 6s, no extra speed, power comes from the effect.
   // Lv.4 follows Lv.3 by itself only when the separate ultimate meter is full; the meter fills faster further back.
-  const ULT_TIME = 5;
+  const ULT_TIME = 6;
   const ULTS = {
     flame: { name: 'ทางไฟ', desc: 'ทิ้งไฟไว้ข้างหลัง ใครวิ่งทับจะช้าลง (โล่กันได้)', color: 0xff5a10 },
     glide: { name: 'ร่อนลม', desc: 'กระโดดลอยร่อนข้ามช่องว่างและสิ่งกีดขวาง', color: 0x5aff8a },
@@ -30,9 +30,6 @@
   const veiled = r => r.stage === 4 && r.def.ult === 'veil';
   const CORK_TURNS = 3, CORK_PIVOT = 1.6;   // Wind Glide roll: full turns, and pivot height (mid-rider) above the board
   const GAUGE_REGEN = 7;                         // gauge % per second
-  // race start: riders wait on the road beside their boards, then sprint and leap on at GO
-  const START_SPOT = new V3(-1.5, 0, -0.5), START_TAKEOFF = new V3(-0.75, 0, -0.2), START_RUN = 0.45, START_JUMP = 0.35;
-  const _ground = new V3(), _spot = new V3(), _takeoff = new V3();
   const EMP_DELAY = 10;                          // seconds an EMP counts down over each target's head before it strikes
   const BOOST_MIN = 20;                          // gauge % needed for a short Lv.1-only boost
   const GRAVITY = 34;
@@ -895,29 +892,6 @@
       return true;
     }
 
-    // Start sequence for the rider model: { mode, runT, jumpK } for PB.animateRider, and the rider placed to match.
-    startPose(m) {
-      const rd = m.rider, home = m.riderHome, t = race.phase === 'countdown' ? -1 : race.time;
-      if (t >= START_RUN + START_JUMP) {
-        if (!this.onBoard) { rd.position.copy(home); rd.rotation.y = m.riderYaw; this.onBoard = true; }
-        return { mode: 'ride' };
-      }
-      this.onBoard = false;
-      // the road, in the rider's parent space (the racer's origin floats above it and bobs, and the model is scaled)
-      m.root.updateMatrixWorld(true);
-      const road = rd.parent.worldToLocal(_ground.set(this.pos.x, race.track.heightAt(this.pos, this.idx) + 0.03, this.pos.z)).y;
-      const spot = _spot.copy(START_SPOT).setY(road), takeoff = _takeoff.copy(START_TAKEOFF).setY(road);
-      if (t < 0) { rd.position.copy(spot); rd.rotation.y = 0; return { mode: 'stand' }; }
-      if (t < START_RUN) {   // sprint alongside, angling in toward the board
-        rd.position.lerpVectors(spot, takeoff, t / START_RUN); rd.rotation.y = 0.35;
-        return { mode: 'run', runT: t };
-      }
-      const k = (t - START_RUN) / START_JUMP;   // leap: an arc from the take-off spot onto the board
-      rd.position.lerpVectors(takeoff, home, k); rd.position.y += Math.sin(k * Math.PI) * 0.9;
-      rd.rotation.y = 0.35 + (m.riderYaw - 0.35) * k;
-      return { mode: 'jump', jumpK: k };
-    }
-
     // perfect start: one stage of Booster Lv.3 straight off the line; it does not use or empty the gauge
     startBoost() {
       this.stage = 3; this.boostMax = 3; this.freeBoost = true; this.stageTimer = this.stageDur = STAGE_TIME;
@@ -1368,13 +1342,11 @@
       } else if (m.body.position.x || m.body.position.y) m.body.position.set(0, 0, 0);
       if (this.spin > 0) m.body.rotation.y = (1.4 - this.spin) * 11;
       else m.body.rotation.y += ((this.drifting ? this.driftDir * 0.5 : 0) - wrapAngle(m.body.rotation.y)) * Math.min(1, 10 * dt);
-      // start: stand on the road beside the board through the countdown; at GO sprint alongside and leap on
-      const pose = this.startPose(m);
       // turning pose; while spun out by a hit the rider flails left and right
       const flail = this.spin > 0 || this.falling;
       PB.animateRider(m, { dt, steer: flail ? Math.sin(race.time * 18) : this.steerVis,
         drift: this.drifting ? this.driftDir : 0, stage: this.stage, speed: this.speed, time: race.time,
-        air: this.air || this.falling || this.bounceT > 0 ? 1 : 0, mode: pose.mode, runT: pose.runT, jumpK: pose.jumpK });
+        air: this.air || this.falling || this.bounceT > 0 ? 1 : 0 });
       m.shield.visible = this.shield > 0;
       m.shield.material.color.setHex(this.stage === 4 && this.def.ult === 'radiant' ? 0xffd23a : 0x44ccff);
       if (m.shield.visible) m.shield.material.opacity = 0.2 + Math.sin(race.time * 10) * 0.06;
