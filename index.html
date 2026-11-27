@@ -225,19 +225,22 @@
   <div class="panel center-panel">
     <h2>เลือกด่าน</h2>
     <div id="track-grid" class="track-grid"></div>
-    <div class="diff-row">
-      <span>ความยาก:</span>
-      <button class="chip" data-diff="0">ง่าย</button>
-      <button class="chip" data-diff="1">ปกติ</button>
-      <button class="chip" data-diff="2">ยาก</button>
+    <!-- race options sit side by side under the tracks; the track list scrolls inside the panel if space runs out -->
+    <div class="race-opts">
+      <div class="diff-row">
+        <span>ความยาก:</span>
+        <button class="chip" data-diff="0">ง่าย</button>
+        <button class="chip" data-diff="1">ปกติ</button>
+        <button class="chip" data-diff="2">ยาก</button>
+      </div>
+      <div class="diff-row">
+        <span>ไอเทม:</span>
+        <button class="chip" data-items="1">เปิด</button>
+        <button class="chip" data-items="0">ปิด (แข่งความเร็วล้วน)</button>
+      </div>
     </div>
-    <div class="diff-row">
-      <span>ไอเทม:</span>
-      <button class="chip" data-items="1">เปิด</button>
-      <button class="chip" data-items="0">ปิด (แข่งความเร็วล้วน)</button>
-    </div>
-    <div class="race-info">3 รอบ (Laps) • 8 นักแข่ง</div>
-    <div class="row">
+    <div class="row track-foot">
+      <span class="race-info">3 รอบ (Laps) • 8 นักแข่ง</span>
       <button class="btn ghost" data-go="char">◀ กลับ</button>
       <button class="btn big" id="btn-race">เริ่มแข่ง! 🏁</button>
     </div>
