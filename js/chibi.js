@@ -395,8 +395,12 @@
   }
   PB.buildHand = buildHand;
 
+  // a wing that flaps around its own origin (the root on the back); s = +1 character's left, -1 right
+  function wingRig(g, s) { return { g, s, y: g.rotation.y, z: g.rotation.z }; }
+
   function buildRider(def) {
     // node names are the contract with Blender models (see docs/BLENDER.md)
+    const wings = [];
     const rider = new THREE.Group(); rider.name = 'Rider';
     const legs = new THREE.Group(); legs.name = 'Legs';
     rider.add(legs);
@@ -459,9 +463,12 @@
       shape.moveTo(0, 0); shape.lineTo(0.9, 0.5); shape.lineTo(0.75, 0.05); shape.lineTo(0.55, 0.2);
       shape.lineTo(0.45, -0.15); shape.lineTo(0.25, 0.0); shape.lineTo(0.1, -0.25); shape.lineTo(0, 0);
       const wm = toon(0x2a1f3a, { side: THREE.DoubleSide });
-      for (const s of [-1, 1]) {
-        const w = mesh(new THREE.ShapeGeometry(shape), wm, s * 0.12, 1.3, -0.2, body);
-        w.scale.set(s * 0.85, 0.85, 0.85); w.rotation.y = s * 0.5;
+      for (const s of [-1, 1]) {   // each wing hangs from a pivot at its root so PB.animateRider can flap it
+        const pivot = new THREE.Group(); pivot.name = s < 0 ? 'WingR' : 'WingL';
+        pivot.position.set(s * 0.12, 1.3, -0.2); pivot.rotation.y = s * 0.5; body.add(pivot);
+        const w = mesh(new THREE.ShapeGeometry(shape), wm, 0, 0, 0, pivot);
+        w.scale.set(s * 0.85, 0.85, 0.85);
+        wings.push(wingRig(pivot, s));
       }
     }
     const head = buildHead(def);
@@ -469,7 +476,7 @@
     head.position.y = 2.23;
     head.scale.set(0.8, 0.76, 0.77);   // head-space is built at radius 0.9; this makes it ~0.7
     body.add(head);
-    return { rider, legs, upper, head, arms, rig: { pelvis, legs: legRig, fores, hip: LEG.hip } };
+    return { rider, legs, upper, head, arms, wings, rig: { pelvis, legs: legRig, fores, hip: LEG.hip } };
   }
 
   // ---------- jet surfboard ----------
@@ -772,6 +779,20 @@
       h.g.rotation.x = h.x + (wind + flutter) * h.w;
     }
 
+    // wings: beat faster and wider the faster the rider goes (and hard while airborne), slow and small when standing.
+    // Each stroke folds the wing back and lifts it, then sweeps it open again.
+    if (m.wings && m.wings.length) {
+      const pace = Math.min(Math.abs(p.speed) / 110, 1);
+      const rate = 4 + pace * 9 + p.stage * 0.8 + a.air * 5;   // rad/s of the beat
+      a.wingPh = (a.wingPh || 0) + rate * dt;
+      const amp = 0.18 + pace * 0.32 + a.air * 0.2;
+      const beat = Math.sin(a.wingPh), lift = Math.sin(a.wingPh + 0.9);
+      for (const w of m.wings) {
+        w.g.rotation.y = w.y + w.s * amp * (0.45 + 0.55 * beat);   // + folds back behind the shoulders
+        w.g.rotation.z = w.z + w.s * amp * 0.55 * lift + w.s * a.lean * 0.12;   // up/down, tilting into turns
+      }
+    }
+
     // braids: every link springs toward a pose set by the rider's motion. Lower links are softer and are also pushed by
     // how fast the link above is swinging, so a turn starts at the root and whips down the plait, then settles.
     // Blender hair rigged at load time uses the same springs, one chain per strand or per slice of a long hairdo
@@ -843,6 +864,70 @@
     return t;
   };
 
+  // A face mesh named "FaceArt" keeps the face painted in its own texture. Its blink frame is made from that picture:
+  // each eye (the biggest patch of paint near where FACE_LAYOUT puts it, plus any specks inside it) is wiped, so the
+  // head's skin shows through, and a closed lid is drawn across where it was.
+  function faceArtFrames(img) {
+    const W = img.width, H = img.height;
+    const canvas = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
+    const tex = c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
+    const oc = canvas(); oc.getContext('2d').drawImage(img, 0, 0);
+    const sc = canvas(), x = sc.getContext('2d'); x.drawImage(img, 0, 0);
+    const id = x.getImageData(0, 0, W, H), px = id.data;
+    // label the patches of paint (4-connected, alpha > 40)
+    const lab = new Int32Array(W * H).fill(-1), comps = [], stack = [], eyes = [];
+    for (let i = 0; i < W * H; i++) {
+      if (lab[i] >= 0 || px[i * 4 + 3] <= 40) continue;
+      const c = { n: 0, sx: 0, sy: 0, x0: W, y0: H, x1: 0, y1: 0, dark: 765, col: [0, 0, 0] };
+      lab[i] = comps.length; stack.push(i);
+      while (stack.length) {
+        const j = stack.pop(), jx = j % W, jy = (j - jx) / W;
+        c.n++; c.sx += jx; c.sy += jy;
+        if (jx < c.x0) c.x0 = jx; if (jx > c.x1) c.x1 = jx; if (jy < c.y0) c.y0 = jy; if (jy > c.y1) c.y1 = jy;
+        const r = px[j * 4], g = px[j * 4 + 1], b = px[j * 4 + 2];
+        if (px[j * 4 + 3] > 200 && r + g + b < c.dark) { c.dark = r + g + b; c.col = [r, g, b]; }
+        for (const k of [jx > 0 ? j - 1 : -1, jx < W - 1 ? j + 1 : -1, j - W, j + W]) {
+          if (k >= 0 && k < W * H && lab[k] < 0 && px[k * 4 + 3] > 40) { lab[k] = comps.length; stack.push(k); }
+        }
+      }
+      comps.push(c);
+    }
+    const k = W / (FACE_BOX.x1 - FACE_BOX.x0);
+    for (const s of [-1, 1]) {
+      const ex = (s * FACE_LAYOUT.eyeX - FACE_BOX.x0) * k, ey = (FACE_BOX.y0 - FACE_LAYOUT.eyeY) * k;
+      let eye = null;
+      comps.forEach(c => {
+        const cx = c.sx / c.n, cy = c.sy / c.n;
+        if (Math.sign(cx - W / 2) === s && Math.hypot(cx - ex, cy - ey) < W * 0.2 && (!eye || c.n > eye.n)) eye = c;
+      });
+      if (!eye) continue;
+      const pad = 3, bx0 = eye.x0 - pad, by0 = eye.y0 - pad, bx1 = eye.x1 + pad, by1 = eye.y1 + pad;
+      const wipe = new Set();
+      comps.forEach((c, i) => { const cx = c.sx / c.n, cy = c.sy / c.n; if (cx > bx0 && cx < bx1 && cy > by0 && cy < by1) wipe.add(i); });
+      for (let y = Math.max(0, by0); y <= Math.min(H - 1, by1); y++) {
+        for (let xx = Math.max(0, bx0); xx <= Math.min(W - 1, bx1); xx++) {
+          const j = y * W + xx;
+          if (wipe.has(lab[j]) || px[j * 4 + 3] <= 40) px[j * 4 + 3] = 0;   // also the soft edge around it
+        }
+      }
+      eye.s = s;
+      eye.lid = 'rgb(' + eye.col.join(',') + ')';
+      eyes.push(eye);
+    }
+    x.putImageData(id, 0, 0);
+    // closed lids: a soft downward curve across each eye, with a flick at the outer corner
+    x.lineCap = 'round';
+    for (const e of eyes) {
+      const w = e.x1 - e.x0, h = e.y1 - e.y0, cx = (e.x0 + e.x1) / 2, cy = e.y0 + h * 0.55;
+      const outer = e.s < 0 ? e.x0 : e.x1;   // screen-left eye's outer corner is on the left
+      x.strokeStyle = e.lid; x.lineWidth = Math.max(4, h * 0.07);
+      x.beginPath(); x.ellipse(cx, cy - h * 0.06, w * 0.44, h * 0.16, 0, Math.PI * 0.06, Math.PI * 0.94); x.stroke();
+      x.lineWidth = Math.max(3, h * 0.045);
+      x.beginPath(); x.moveTo(outer - e.s * w * 0.06, cy); x.lineTo(outer + e.s * w * 0.04, cy - h * 0.12); x.stroke();
+    }
+    return { open: tex(oc), shut: tex(sc) };
+  }
+
   function buildGltfRider(def) {
     const src = def._gltf.clone(true);
     src.traverse(o => {   // drop glTF extras (userData) so nothing exported from the game is mistaken for live data
@@ -889,7 +974,9 @@
     src.traverse(o => { if (!faceMesh && o.isMesh && /^Face/i.test(o.name)) faceMesh = o; });
     if (!faceMesh) { const f = src.getObjectByName('Face'); if (f) f.traverse(o => { if (!faceMesh && o.isMesh) faceMesh = o; }); }
     if (faceMesh) {
-      const open = PB.paintFaceDecal(def, false), shut = PB.paintFaceDecal(def, true);
+      const artImg = [faceMesh.name, faceMesh.parent && faceMesh.parent.name].some(n => /^FaceArt/i.test(n || '')) &&
+        faceMesh.material && faceMesh.material.map && faceMesh.material.map.image;
+      const { open, shut } = artImg ? faceArtFrames(artImg) : { open: PB.paintFaceDecal(def, false), shut: PB.paintFaceDecal(def, true) };
       const mat = new THREE.MeshBasicMaterial({ map: open, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       mat.userData.maps = [open, shut];
       faceMesh.material = mat; faceMesh.castShadow = false; faceMesh.renderOrder = 2;
@@ -898,7 +985,16 @@
     head.userData.braids = rigHangingHair(src, head);
     const legsNode = find('Legs'), arms = [find('ArmR'), find('ArmL')];
     const rig = legsNode.parent ? rigGltfBody(src, legsNode, arms) : null;
-    return { rider, legs: legsNode, upper, head, arms, rig, hipY: upper.position.y };
+    // objects named WingL / WingR flap around their origin (put it where the wing meets the back)
+    const wings = [];
+    for (const [name, s] of [['WingL', 1], ['WingR', -1]]) {
+      const w = src.getObjectByName(name);
+      if (!w) continue;
+      w.userData.keep = true;   // never merged into the body, or it could not move
+      w.traverse(o => { if (o.isMesh) o.userData.keep = true; });
+      wings.push(wingRig(w, s));
+    }
+    return { rider, legs: legsNode, upper, head, arms, wings, rig, hipY: upper.position.y };
   }
 
   // Blender hair moves at load time, with nothing needed in Blender: the hair mesh under Head (a sculpted wig, say) is
@@ -1079,7 +1175,7 @@
     board.flames.forEach(f => { keep.add(f.outer); keep.add(f.core); });
     PB.optimize.mergeRigid(root, keep);
     return { root, body, rider: r.rider, legs: r.legs, upper: r.upper, head: r.head, arms: r.arms, hair: r.head.userData.sway,
-      braids: r.head.userData.braids || null, rig: r.rig || null,
+      braids: r.head.userData.braids || null, rig: r.rig || null, wings: r.wings || [],
       riderHome: r.rider.position.clone(), riderYaw: r.rider.rotation.y,   // where the rider stands on the board
       hipY: r.hipY == null ? HIP_Y : r.hipY,
       board: board.group, flames: board.flames, hover: board.hover, shield,
