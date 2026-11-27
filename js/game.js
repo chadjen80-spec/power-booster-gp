@@ -1411,6 +1411,14 @@
         const a = (this.isPlayer ? 0.35 : 0.12) + Math.sin(race.time * 14) * 0.05;
         m.root.traverse(o => { if (o.isMesh && o.material && o.material.userData.veil) o.material.opacity = o.material.userData.veil.o * a; });
       }
+      // ...wrapped in a black wind aura: a shell of dark air streaming back around rider and board, fading in and out
+      if (veil || (m.veilAura && m.veilAura.visible)) {
+        if (!m.veilAura) { m.veilAura = makeVeilAura(); m.root.add(m.veilAura); }
+        const u = m.veilAura.material.uniforms;
+        u.uFade.value += ((veil ? 1 : 0) - u.uFade.value) * Math.min(1, dt * (veil ? 7 : 4));
+        u.uTime.value = race.time;
+        m.veilAura.visible = u.uFade.value > 0.02;
+      }
       if (ult === 'flame' || ult === 'ice') {   // drop a fire / ice patch behind the board every 0.12s
         this.fireAcc += dt;
         while (this.fireAcc > 0.12) { this.fireAcc -= 0.12; spawnFire(this, m.root.localToWorld(new V3(0, 0, -2.8)), ult === 'ice' ? 'ice' : 'fire'); }
@@ -1674,6 +1682,58 @@
         if (near(q)) audio.sfx('boom');
       }
     }
+  }
+
+  // Shadow Veil aura: a bullet-shaped shell (rounded nose ahead, open behind) around rider and board. The shader draws
+  // smoky black air with a dim violet rim, and dashes of darker wind racing back along it with a slight swirl.
+  let veilGeo = null;
+  const VEIL_VS = `
+    varying vec3 vPos; varying vec3 vN; varying vec3 vView;
+    void main() {
+      vPos = position;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      vN = normalize(normalMatrix * normal); vView = normalize(-mv.xyz);
+      gl_Position = projectionMatrix * mv;
+    }`;
+  const VEIL_FS = `
+    uniform float uTime, uFade; uniform vec3 uDark, uEdge;
+    varying vec3 vPos; varying vec3 vN; varying vec3 vView;
+    float hash(float n) { return fract(sin(n) * 43758.5453); }
+    void main() {
+      float rim = 1.0 - abs(dot(normalize(vN), normalize(vView)));
+      rim = pow(rim, 1.6);
+      float ang = atan(vPos.x, vPos.y - 1.55) / 6.2832 + 0.5;    // around the shell
+      float along = vPos.z;                                      // + is the nose
+      // wind dashes: 22 lanes around, each with its own phase and speed, swirling a little as they run back
+      float lanes = 22.0, lp = ang * lanes + along * 0.18 + uTime * 0.35;
+      float lane = floor(lp), r = hash(lane);
+      float across = 1.0 - abs(fract(lp) - 0.5) * 2.0;
+      float t = fract(along * (0.16 + r * 0.08) + uTime * (1.3 + r * 1.2) + r * 7.0);
+      float dash = smoothstep(0.0, 0.06, t) * smoothstep(0.55, 0.12, t) * pow(across, 5.0);
+      dash *= smoothstep(2.85, 2.1, along);                      // lanes meet at the tip: no starburst there
+      float nose = smoothstep(0.5, 2.6, along);                  // the front pushes the air: thicker
+      float tail = smoothstep(-3.1, -1.0, along);                // the open back fades out
+      float a = (0.05 + rim * 0.55 + dash * 0.6 + nose * 0.14) * tail * uFade;
+      vec3 col = mix(uDark, uEdge, clamp(rim * 0.6 + dash * 0.5, 0.0, 1.0));   // violet-tinged streaks still show at night
+      gl_FragColor = vec4(col, clamp(a, 0.0, 0.85));
+    }`;
+  function makeVeilAura() {
+    if (!veilGeo) {
+      // profile: (radius, z) from the nose back to the open tail; a lathe turns it round the Y axis, then Y -> forward
+      const prof = [[0.05, 2.9], [0.6, 2.8], [1.05, 2.45], [1.4, 1.8], [1.55, 1.0], [1.6, 0], [1.55, -1.4], [1.4, -3.1]]
+        .map(([r, z]) => new THREE.Vector2(r, z));
+      veilGeo = new THREE.LatheGeometry(prof, 40);
+      veilGeo.rotateX(Math.PI / 2);                 // lathe axis Y -> Z: the nose points forward (+Z, where the board heads)
+      veilGeo.scale(1, 1.05, 1);                    // a touch taller than wide: rider standing on the board
+      veilGeo.translate(0, 1.55, 0);
+      veilGeo.computeVertexNormals();
+    }
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uFade: { value: 0 }, uDark: { value: new THREE.Color(0x07040c) }, uEdge: { value: new THREE.Color(0x6a36b0) } },
+      vertexShader: VEIL_VS, fragmentShader: VEIL_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    const aura = new THREE.Mesh(veilGeo, mat);
+    aura.renderOrder = 3; aura.visible = false; aura.frustumCulled = false;
+    return aura;
   }
 
   // small arcs and sparks around a shocked rider
