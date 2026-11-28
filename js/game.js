@@ -2560,8 +2560,13 @@
       const onRight = state.screen === 'char' || state.screen === 'shop';
       const onLeft = state.screen === 'title';   // title menu sits on the left, so the racer stands on the right
       camera.fov = 45; camera.updateProjectionMatrix();
-      camera.position.set(0, 3.2, 10.5);
-      camera.lookAt(window.innerWidth > 560 ? (onRight ? 3.2 : onLeft ? -2.8 : 0) : 0, 1.6, 0);
+      // character select on wide screens: the camera moves in to half the distance, so the racer shows twice as big
+      // (eased in and out). Phones keep the normal framing: there the racer has only the strip above the panel.
+      const zoomIn = state.screen === 'char' && window.innerWidth > 560 && window.innerWidth > window.innerHeight;
+      menu.zoom = (menu.zoom || 0) + ((zoomIn ? 1 : 0) - (menu.zoom || 0)) * Math.min(1, dt * 6);
+      const zk = 1 - 0.5 * menu.zoom;
+      camera.position.set(0, 3.2 - 0.75 * menu.zoom, 10.5 * zk);
+      camera.lookAt(window.innerWidth > 560 ? (onRight ? 3.2 : onLeft ? -2.8 : 0) * zk : 0, 1.6 + 0.5 * menu.zoom, 0);
       post.bloom.strength = 0.6; post.bloom.radius = 0.5; post.bloom.threshold = 0.93;
       post.u.uSat.value = 1.12; post.u.uContrast.value = 1.05;
       renderScene(menu.scene);
